@@ -9,7 +9,6 @@ import { homeRouteForRole } from '../../lib/access';
 import { useAuth } from '../../context/AuthContext';
 import { LoadingScreen } from '../../components/layout/ProtectedRoute';
 
-const DEPARTMENT = 'Department of Computer Science & Engineering (Data Science)';
 
 function friendlyAuthError(code: string): string {
   switch (code) {
@@ -78,7 +77,6 @@ export default function LoginPage() {
         email: user.email ?? '',
         displayName: user.displayName || 'Super Admin',
         role: 'super_admin',
-        department: DEPARTMENT,
         status: 'active',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -105,7 +103,6 @@ export default function LoginPage() {
           email: user.email,
           displayName: 'Super Admin',
           role: 'super_admin',
-          department: DEPARTMENT,
           status: 'active',
         },
         null,
@@ -124,7 +121,7 @@ export default function LoginPage() {
             <GraduationCap className="h-8 w-8" />
           </div>
           <h1 className="text-3xl font-bold">CAGS Automation</h1>
-          <p className="mt-2 text-sm text-slate-300">Department of Computer Science &amp; Engineering [Data Science]</p>
+          <p className="mt-2 text-sm text-slate-300">Academic records &amp; attendance portal for engineering departments</p>
         </div>
 
         <div className="glass-card p-8">

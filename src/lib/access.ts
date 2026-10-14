@@ -25,9 +25,19 @@ export function decideAccess(
 /** Validates a raw Firestore document into a supported UserProfile, or null if role/status unsupported. */
 export function parseUserProfile(uid: string, data: Record<string, unknown> | undefined): UserProfile | null {
   if (!data) return null;
-  const role = data.role;
-  const status = data.status;
-  if (role !== 'super_admin' && role !== 'teacher') return null;
-  if (status !== 'active' && status !== 'disabled') return null;
-  return { ...(data as object), uid, role, status } as UserProfile;
+
+  // Trim and check role & status
+  const rawRole = typeof data.role === 'string' ? data.role.trim() : '';
+  const rawStatus = typeof data.status === 'string' ? data.status.trim() : '';
+
+  if (rawRole !== 'super_admin' && rawRole !== 'teacher') {
+    console.warn(`[CAGS Auth] Unsupported or missing role in users/${uid}:`, data.role, '(Expected "super_admin" or "teacher")');
+    return null;
+  }
+  if (rawStatus !== 'active' && rawStatus !== 'disabled') {
+    console.warn(`[CAGS Auth] Unsupported or missing status in users/${uid}:`, data.status, '(Expected "active" or "disabled")');
+    return null;
+  }
+
+  return { ...(data as object), uid, role: rawRole, status: rawStatus } as UserProfile;
 }

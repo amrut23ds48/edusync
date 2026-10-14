@@ -33,12 +33,17 @@ export default function AdminOverviewPage() {
     if (!user) return;
     setSeeding(true);
     try {
+      console.log('[CAGS] Seeding outcomes with superAdminUid:', user.uid);
       await seedOfficialGlobalOutcomes(user.uid);
       await loadCount();
       toast.success(`Seeded ${EXPECTED} official outcomes.`);
-    } catch (err) {
-      const code = (err as { code?: string }).code;
-      toast.error(code === 'permission-denied' ? 'Permission denied: Super Admin access required.' : 'Seeding failed. Nothing was saved.');
+    } catch (err: any) {
+      console.error('[CAGS] Seeding failed with error:', err);
+      const code = err?.code || '';
+      const msg = err?.message || '';
+      toast.error(code === 'permission-denied' 
+        ? `Permission denied. Check firestore.rules and users/${user.uid} role.`
+        : `Seeding failed: ${msg || 'Nothing was saved.'}`);
     } finally {
       setSeeding(false);
     }
@@ -52,7 +57,12 @@ export default function AdminOverviewPage() {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div>
             <h1 className="text-xl font-bold text-slate-900">Super Admin Dashboard</h1>
-            <p className="text-xs text-slate-500">{userProfile?.displayName} · {userProfile?.email}</p>
+            <p className="text-xs text-slate-500">
+              {userProfile?.displayName} · {userProfile?.email} · 
+              <span className="ml-1 font-mono text-emerald-600 font-semibold">role: "{userProfile?.role}"</span> · 
+              <span className="ml-1 font-mono text-emerald-600 font-semibold">status: "{userProfile?.status}"</span>
+            </p>
+            <p className="text-[11px] text-slate-400 font-mono">UID: {user?.uid}</p>
           </div>
           <button id="logout-button" type="button" className="btn-secondary !py-2" onClick={() => void logout()}>
             <LogOut className="h-4 w-4" /> Sign out

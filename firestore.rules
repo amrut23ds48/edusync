@@ -86,6 +86,12 @@ service cloud.firestore {
     // =========================================================================
     // 3. ACADEMIC HIERARCHY & GLOBAL OUTCOMES
     // =========================================================================
+    // Departments are managed by any Super Admin; all active users may read them.
+    match /departments/{departmentId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
     match /academic_years/{yearId} {
       allow read: if isActiveUser();
       allow create, update, delete: if isSuperAdmin();

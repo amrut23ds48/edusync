@@ -225,7 +225,7 @@ service cloud.firestore {
     // 6. TIMETABLE, TEACHING PLAN & PER-LECTURE ATTENDANCE
     // =========================================================================
     match /timetables/{slotId} {
-      allow read: if isSuperAdmin() || (isTeacher() && isAssignedToSubject(resource.data.subjectId));
+      allow read: if isSuperAdmin() || (isTeacher() && (resource.data.teacherUid == request.auth.uid || isAssignedToSubject(resource.data.subjectId)));
       allow create, update, delete: if isSuperAdmin();
     }
 

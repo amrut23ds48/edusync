@@ -12,7 +12,8 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import type { TeachingPlanEntry, MappedCoOption } from '../types';
+import type { TeachingPlanEntry, MappedCoOption, SyllabusModule } from '../types';
+import { requestAiFullSyllabusPlan, type AiGeneratedLecture } from './cagsAiService';
 
 export const TEACHING_PLAN_COLLECTION = 'teaching_plan_entries';
 
@@ -198,3 +199,93 @@ export async function seedStandardTeachingPlanIfEmpty(
   await batch.commit();
   return { seeded: true, count: STANDARD_SYLLABUS_TOPICS.length };
 }
+
+/**
+ * Generates an array of sequential dates on class days (MWF) starting from startDate.
+ */
+export function generateLectureDates(startDateStr: string, totalCount: number): string[] {
+  const dates: string[] = [];
+  const parts = startDateStr.split('-').map(Number);
+  const current = new Date(parts[0], (parts[1] || 1) - 1, parts[2] || 1);
+
+  for (let i = 0; i < totalCount; i++) {
+    while (current.getDay() !== 1 && current.getDay() !== 3 && current.getDay() !== 5) {
+      current.setDate(current.getDate() + 1);
+    }
+    const yyyy = current.getFullYear();
+    const mm = String(current.getMonth() + 1).padStart(2, '0');
+    const dd = String(current.getDate()).padStart(2, '0');
+    dates.push(`${yyyy}-${mm}-${dd}`);
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+}
+
+/**
+ * Universal dynamic teaching plan generator:
+ * Calls AI (or deterministic pedagogical heuristic) to generate exactly totalHours
+ * lectures based on the Admin's syllabus modules & COs, and persists to Firestore.
+ */
+export async function generateAndSeedDynamicTeachingPlan(
+  subjectId: string,
+  courseName: string,
+  courseCode: string,
+  classId: string,
+  academicYearId: string,
+  teacherUid: string,
+  totalHours: number,
+  syllabusModules: SyllabusModule[] = [],
+  courseOutcomes: Array<{ coCode: 'CO1' | 'CO2' | 'CO3' | 'CO4'; description: string; syllabusHours: number }> = [],
+  startDateStr: string = '2026-07-06'
+): Promise<{ count: number; lectures: AiGeneratedLecture[] }> {
+  // 1. Generate full syllabus plan
+  const plan = await requestAiFullSyllabusPlan(
+    courseName,
+    courseCode,
+    totalHours,
+    syllabusModules,
+    courseOutcomes
+  );
+
+  // 2. Generate lecture dates
+  const dates = generateLectureDates(startDateStr, plan.lectures.length);
+
+  // 3. Batch commit to Firestore
+  const batch = writeBatch(db);
+  for (let i = 0; i < plan.lectures.length; i++) {
+    const lect = plan.lectures[i];
+    const docId = `tp_${subjectId}_lect_${String(lect.sequenceNo).padStart(2, '0')}`;
+    const docRef = doc(db, TEACHING_PLAN_COLLECTION, docId);
+
+    const entry: TeachingPlanEntry = {
+      id: docId,
+      academicYearId,
+      classId,
+      subjectId,
+      teacherUid,
+      sequenceNo: lect.sequenceNo,
+      chapterNo: lect.chapterNo,
+      chapterTitle: lect.chapterTitle,
+      topicTitle: lect.topicTitle,
+      lecturesRequired: 1,
+      mappedCoCode: lect.mappedCoCode,
+      plannedDate: dates[i] || startDateStr,
+      actualDate: null,
+      ictToolUsed: lect.recommendedIct,
+      remark: lect.sequenceNo === 1 ? 'Introduction' : (lect.pedagogicalGoal || ''),
+      linkedAttendanceSessionId: null,
+      status: 'pending',
+    };
+
+    batch.set(docRef, {
+      ...entry,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: teacherUid,
+    }, { merge: true });
+  }
+
+  await batch.commit();
+  return { count: plan.lectures.length, lectures: plan.lectures };
+}
+

@@ -1,22 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import {
   BookMarked,
+  BookOpen,
   Plus,
   Sparkles,
   CheckCircle2,
   Clock,
   ArrowLeft,
   CalendarCheck,
+  Calendar,
   Layers,
   Trash2,
   Edit2,
   Search,
   Filter,
   Loader2,
+  Info,
+  X,
 } from 'lucide-react';
 
 import toast from 'react-hot-toast';
+import { db } from '../../lib/firebase';
 import { useAcademic } from '../../context/AcademicContext';
 import { useAuth } from '../../context/AuthContext';
 import ContextBreadcrumb from '../../components/layout/ContextBreadcrumb';
@@ -26,7 +32,7 @@ import {
   createTeachingPlanEntry,
   updateTeachingPlanEntry,
   deleteTeachingPlanEntry,
-  seedStandardTeachingPlanIfEmpty,
+  generateAndSeedDynamicTeachingPlan,
 } from '../../services/teachingPlanService';
 import { requestAiTeachingPlanIct } from '../../services/cagsAiService';
 
@@ -41,6 +47,13 @@ export default function TeachingPlanPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [coFilter, setCoFilter] = useState<string>('all');
   const [generatingIctId, setGeneratingIctId] = useState<string | null>(null);
+
+  // Official Syllabus & Generation Modals
+  const [showSyllabusModal, setShowSyllabusModal] = useState(false);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [startDateInput, setStartDateInput] = useState('2026-07-06');
+  const [courseOutcomes, setCourseOutcomes] = useState<any[]>([]);
+  const [loadingSyllabus, setLoadingSyllabus] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,25 +90,52 @@ export default function TeachingPlanPage() {
     }
   }, [subjectId]);
 
-  // Seed syllabus helper
-  const handleSeedSyllabus = async () => {
+  // Load syllabus and approved COs for modal
+  const openSyllabusModal = async () => {
+    if (!subjectId) return;
+    setShowSyllabusModal(true);
+    setLoadingSyllabus(true);
+    try {
+      const qCos = query(collection(db, 'course_outcomes'), where('subjectId', '==', subjectId));
+      const snap = await getDocs(qCos);
+      const list = snap.docs.map((d) => d.data());
+      list.sort((a: any, b: any) => (a.coNumber || 0) - (b.coNumber || 0));
+      setCourseOutcomes(list);
+    } catch (err: any) {
+      console.error('Failed to load course outcomes:', err);
+    } finally {
+      setLoadingSyllabus(false);
+    }
+  };
+
+  // Generate dynamic AI syllabus plan for ANY arbitrary hour count
+  const handleGenerateDynamicPlan = async () => {
     if (!subjectId || !activeClass || !activeSubject || !user) return;
     setSeeding(true);
     try {
-      const res = await seedStandardTeachingPlanIfEmpty(
+      const qCos = query(collection(db, 'course_outcomes'), where('subjectId', '==', subjectId));
+      const snap = await getDocs(qCos);
+      const list = snap.docs.map((d) => d.data() as any);
+      list.sort((a: any, b: any) => (a.coNumber || 0) - (b.coNumber || 0));
+
+      const res = await generateAndSeedDynamicTeachingPlan(
         subjectId,
+        activeSubject.courseName,
+        activeSubject.courseCode,
         activeClass.id,
         activeClass.academicYearId,
-        user.uid
+        user.uid,
+        activeSubject.totalSyllabusHours || 39,
+        activeSubject.syllabusModules || [],
+        list,
+        startDateInput
       );
-      if (res.seeded) {
-        toast.success(`Successfully populated standard ${res.count}-hour syllabus plan!`);
-        await loadEntries();
-      } else {
-        toast.error(`Teaching plan already has ${res.count} existing entries.`);
-      }
+
+      toast.success(`Successfully generated ${res.count}-hour lecture teaching plan!`);
+      await loadEntries();
+      setShowGenerateModal(false);
     } catch (err: any) {
-      toast.error('Error seeding syllabus: ' + err.message);
+      toast.error('Failed to generate teaching plan: ' + err.message);
     } finally {
       setSeeding(false);
     }
@@ -298,21 +338,29 @@ export default function TeachingPlanPage() {
               <span>Record Lecture Attendance</span>
             </Link>
 
-            {entries.length === 0 && (
-              <button
-                type="button"
-                onClick={handleSeedSyllabus}
-                disabled={seeding}
-                className="btn-primary !text-xs !py-2 !px-3.5 inline-flex items-center gap-1.5 !bg-violet-600 hover:!bg-violet-700"
-              >
-                {seeding ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                <span>Seed Standard 39-Hr Syllabus</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={openSyllabusModal}
+              className="btn-secondary !text-xs !py-2 !px-3.5 inline-flex items-center gap-1.5"
+              title="View Official University Syllabus and Approved COs"
+            >
+              <BookOpen className="h-4 w-4 text-brand-600" />
+              <span>View Official Syllabus</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowGenerateModal(true)}
+              disabled={seeding}
+              className="btn-primary !text-xs !py-2 !px-3.5 inline-flex items-center gap-1.5 !bg-violet-600 hover:!bg-violet-700"
+            >
+              {seeding ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              <span>AI Generate Plan ({activeSubject?.totalSyllabusHours || 39}h)</span>
+            </button>
 
             <button
               type="button"
@@ -413,21 +461,37 @@ export default function TeachingPlanPage() {
               Loading syllabus teaching plan...
             </div>
           ) : entries.length === 0 ? (
-            <div className="p-12 text-center max-w-md mx-auto space-y-3">
-              <BookMarked className="h-10 w-10 text-slate-300 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-800">No Teaching Plan Topics Configured</h3>
-              <p className="text-xs text-slate-500">
-                You can seed the standard 39-hour syllabus with 1-click or add individual topics manually.
-              </p>
-              <button
-                type="button"
-                onClick={handleSeedSyllabus}
-                disabled={seeding}
-                className="btn-primary !text-xs !py-2 !px-4 inline-flex items-center gap-2 mx-auto !bg-violet-600 hover:!bg-violet-700"
-              >
-                <Sparkles className="h-4 w-4" />
-                <span>Seed Standard 39-Hr Syllabus Plan</span>
-              </button>
+            <div className="p-12 text-center max-w-lg mx-auto space-y-4">
+              <BookMarked className="h-12 w-12 text-slate-300 mx-auto" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">No Teaching Plan Topics Configured</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Official Syllabus for <span className="font-bold text-slate-700">{activeSubject?.courseCode}</span> is configured for{' '}
+                  <span className="font-bold text-brand-600 font-mono">{activeSubject?.totalSyllabusHours || 39} contact hours</span>
+                  {activeSubject?.syllabusModules?.length ? ` across ${activeSubject.syllabusModules.length} modules` : ''}.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={openSyllabusModal}
+                  className="btn-secondary !text-xs !py-2 !px-4 inline-flex items-center gap-2"
+                >
+                  <BookOpen className="h-4 w-4 text-brand-600" />
+                  <span>View Official Syllabus</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowGenerateModal(true)}
+                  disabled={seeding}
+                  className="btn-primary !text-xs !py-2 !px-4 inline-flex items-center gap-2 !bg-violet-600 hover:!bg-violet-700"
+                >
+                  {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  <span>Generate AI Syllabus Plan ({activeSubject?.totalSyllabusHours || 39}h)</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -709,6 +773,221 @@ export default function TeachingPlanPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Official Syllabus & Outcomes Preview Modal */}
+      {showSyllabusModal && activeSubject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6">
+          <div className="glass-card max-w-3xl w-full max-h-[88vh] flex flex-col bg-white relative rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700 border border-brand-100 shrink-0">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-slate-900">Official University Syllabus & Approved COs</h2>
+                    <span className="badge bg-brand-50 text-brand-700 border border-brand-200 font-mono font-bold">
+                      {activeSubject.courseCode}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    {activeSubject.courseName} · {activeSubject.classDivision} · Total {activeSubject.totalSyllabusHours} Contact Hours
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSyllabusModal(false)}
+                className="text-slate-400 hover:text-slate-600 transition p-1"
+                title="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+              {loadingSyllabus ? (
+                <div className="py-12 text-center">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600 mb-2" />
+                  <p className="text-xs font-medium text-slate-500">Loading syllabus details...</p>
+                </div>
+              ) : (
+                <>
+                  {activeSubject.prerequisites && (
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700">
+                      <span className="font-bold text-slate-900">Prerequisites: </span>
+                      <span>{activeSubject.prerequisites}</span>
+                    </div>
+                  )}
+
+              {/* Modules Breakdown */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <BookOpen className="h-3.5 w-3.5 text-brand-600" />
+                  <span>Modular Syllabus Breakdown ({activeSubject.syllabusModules?.length || 0} Modules)</span>
+                </h3>
+
+                {activeSubject.syllabusModules && activeSubject.syllabusModules.length > 0 ? (
+                  activeSubject.syllabusModules.map((m) => (
+                    <div key={m.moduleNo} className="p-3.5 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-5 px-2 items-center justify-center rounded bg-brand-600 text-white font-mono font-bold text-[11px]">
+                            M{m.moduleNo}
+                          </span>
+                          <span className="text-xs font-bold text-slate-900">{m.moduleName}</span>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                          {m.hours} hrs
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed pl-7">
+                        {m.topics}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+                    No custom syllabus modules configured yet by the Admin. The system will use standard accredited curriculum foundations.
+                  </div>
+                )}
+              </div>
+
+              {/* Approved Course Outcomes */}
+              <div className="space-y-3 pt-2">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Approved NBA Course Outcomes (CO1–CO4)</span>
+                </h3>
+
+                {courseOutcomes.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {courseOutcomes.map((co: any) => (
+                      <div key={co.coCode} className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-brand-100 text-brand-800">
+                            {co.coCode}
+                          </span>
+                          <span className="text-xs font-mono font-bold text-slate-600">
+                            {co.syllabusHours} hrs
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-700 leading-relaxed">
+                          {co.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-500 italic">
+                    Course outcomes synchronized with official academic hierarchy.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowSyllabusModal(false)}
+                className="btn-secondary !text-xs !py-2 !px-4"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: AI Teaching Plan Generator Modal */}
+      {showGenerateModal && activeSubject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6">
+          <div className="glass-card max-w-lg w-full bg-white relative rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700 border border-violet-100 shrink-0">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">AI Syllabus Teaching Plan Generator</h2>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    {activeSubject.courseCode} · {activeSubject.courseName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGenerateModal(false)}
+                className="text-slate-400 hover:text-slate-600 transition p-1"
+                title="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="p-3.5 bg-violet-50/60 rounded-xl border border-violet-100 text-xs text-violet-900 space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-violet-950">
+                  <Info className="h-4 w-4 text-violet-700 shrink-0" />
+                  <span>Universal Dynamic Generation ({activeSubject.totalSyllabusHours || 39} Lectures)</span>
+                </div>
+                <p className="leading-relaxed">
+                  AI will analyze the Admin's official modular syllabus and generate exactly{' '}
+                  <span className="font-bold font-mono">{activeSubject.totalSyllabusHours || 39} sequential 1-hour lectures</span>.
+                  Each lecture will have specific subtopics, mapped Course Outcomes (CO1–CO4), and pedagogical ICT recommendations.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Semester Start Date (MWF Schedule Starting Point)
+                </label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="date"
+                    required
+                    value={startDateInput}
+                    onChange={(e) => setStartDateInput(e.target.value)}
+                    className="input-field !pl-9 text-xs font-mono"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Lectures will be automatically spaced across class days (Monday, Wednesday, Friday) from this date.
+                </p>
+              </div>
+
+              {entries.length > 0 && (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+                  <span className="font-bold">Notice: </span>
+                  This subject currently has {entries.length} teaching plan entries. Generating a new plan will update and align all {activeSubject.totalSyllabusHours} lecture topics.
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowGenerateModal(false)}
+                className="btn-secondary !text-xs !py-2 !px-3.5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateDynamicPlan}
+                disabled={seeding}
+                className="btn-primary !text-xs !py-2 !px-4 !bg-violet-600 hover:!bg-violet-700"
+              >
+                {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                <span>Generate {activeSubject.totalSyllabusHours || 39}-Lecture Plan</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

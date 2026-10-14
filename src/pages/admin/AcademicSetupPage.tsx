@@ -36,8 +36,10 @@ import type {
   Subject, 
   Department, 
   YearGroup,
-  CourseOutcome
+  CourseOutcome,
+  SyllabusModule
 } from '../../types';
+import { requestAiDraftCourseOutcomes } from '../../services/cagsAiService';
 
 export default function AcademicSetupPage() {
   const { user } = useAuth();
@@ -56,7 +58,11 @@ export default function AcademicSetupPage() {
   const [showCoModal, setShowCoModal] = useState(false);
   const [targetSubjectForCo, setTargetSubjectForCo] = useState<Subject | null>(null);
 
-  // Course Outcomes Form State
+  // Syllabus & Course Outcomes Form State
+  const [activeSyllabusTab, setActiveSyllabusTab] = useState<'modules' | 'cos'>('modules');
+  const [syllabusModules, setSyllabusModules] = useState<SyllabusModule[]>([]);
+  const [prerequisites, setPrerequisites] = useState('');
+  const [draftingCosAi, setDraftingCosAi] = useState(false);
   const [coList, setCoList] = useState<Array<{
     coNumber: 1 | 2 | 3 | 4;
     coCode: 'CO1' | 'CO2' | 'CO3' | 'CO4';
@@ -294,11 +300,48 @@ export default function AcademicSetupPage() {
     }
   }
 
-  // Open Course Outcomes Modal for a Subject
+  // Standard Presets
+  const CSC701_MODULES: SyllabusModule[] = [
+    { moduleNo: 1, moduleName: 'Fundamentals of Neural Network', hours: 4, topics: '1.1 History of Deep Learning, Deep Learning Success Stories, Multilayer Perceptrons (MLPs), Representation Power of MLPs, Sigmoid Neurons, Gradient Descent, Feedforward Neural Networks\n1.2 Deep Networks: Three Classes of Deep Learning Basic Terminologies of Deep Learning' },
+    { moduleNo: 2, moduleName: 'Training, Optimization and Regularization of Deep Neural Network', hours: 10, topics: '2.1 Training Feedforward DNN: Multi Layered Feed Forward, Activation functions (Tanh, Logistic, Linear, Softmax, ReLU, Leaky ReLU), Loss functions (Squared Error, Cross Entropy)\n2.2 Optimization: Learning with backpropagation, Gradient Descent (GD), Stochastic and Mini Batch GD, Momentum Based GD, Nesterov Accelerated GD, AdaGrad, Adam, RMSProp\n2.3 Regularization: Overview of Overfitting, Bias Variance Tradeoff, L1/L2 regularization, Parameter sharing, Dropout, Weight Decay, Batch normalization, Early stopping, Data Augmentation' },
+    { moduleNo: 3, moduleName: 'Autoencoders: Unsupervised Learning', hours: 6, topics: '3.1 Introduction, Linear Autoencoder, Undercomplete Autoencoder, Overcomplete Autoencoders, Regularization in Autoencoders\n3.2 Denoising Autoencoders, Sparse Autoencoders, Contractive Autoencoders\n3.3 Application of Autoencoders: Image Compression' },
+    { moduleNo: 4, moduleName: 'Convolutional Neural Networks (CNN): Supervised Learning', hours: 7, topics: '4.1 Convolution operation, Padding, Stride, Relation between input, output and filter size, CNN architecture: Convolution layer, Pooling Layer, Weight Sharing in CNN, 2D convolution\n4.2 Modern Deep Learning Architectures: LeNet: Architecture, AlexNet: Architecture, ResNet: Architecture' },
+    { moduleNo: 5, moduleName: 'Recurrent Neural Networks (RNN)', hours: 8, topics: '5.1 Sequence Learning Problem, Unfolding Computational graphs, Recurrent Neural Network, Bidirectional RNN, Backpropagation Through Time (BPTT), Vanishing and Exploding Gradients, Truncated BPTT\n5.2 Long Short Term Memory (LSTM): Selective Read, Selective write, Selective Forget, Gated Recurrent Unit (GRU)' },
+    { moduleNo: 6, moduleName: 'Recent Trends and Applications', hours: 4, topics: '6.1 Generative Adversarial Network (GAN): Architecture\n6.2 Applications: Image Generation, DeepFake' },
+  ];
+
+  const CSDO7023_MODULES: SyllabusModule[] = [
+    { moduleNo: 1, moduleName: 'Introduction to Strategic Games', hours: 6, topics: '1.1 Game Theory Foundations, Strategic Form Games, Players, Payoffs\n1.2 Prisoner Dilemma & Social Dilemmas in Data Networks\n1.3 Strict and Weak Dominance, IESDS\n1.4 Tutorial: Dominance Solvability and Payoff Formulation' },
+    { moduleNo: 2, moduleName: 'Games with Perfect Information & Nash Equilibrium', hours: 7, topics: '2.1 Pure Strategy Nash Equilibrium Formulation\n2.2 Cournot Oligopoly Duopoly Model\n2.3 Bertrand Price Competition with Capacity Constraints\n2.4 Stackelberg Leader-Follower, Location Games & Hotelling\n2.5 Applications: Web Search Ranking & Ad Auctions' },
+    { moduleNo: 3, moduleName: 'Mixed Strategy Nash Equilibrium', hours: 7, topics: '3.1 Mixed Strategy Nash Equilibrium (MSNE) Foundations\n3.2 Matching Pennies, Zero-Sum Matrix Games\n3.3 Battle of the Sexes, Coordination Games\n3.4 Minimax Theorem & Linear Programming Formulation' },
+    { moduleNo: 4, moduleName: 'Extensive Games with Imperfect Information', hours: 6, topics: '4.1 Extensive Form Representation, Game Trees, Information Sets\n4.2 Subgame Perfect Nash Equilibrium (SPNE)\n4.3 Backward Induction Algorithm\n4.4 Bargaining Games & Repeated Games' },
+    { moduleNo: 5, moduleName: 'Coalition Games & Cooperative Game Theory', hours: 6, topics: '5.1 Characteristic Function Form, Transferable Utility Games\n5.2 The Core, Emptiness of Core\n5.3 Shapley Value Axiomatics & Marginal Contributions\n5.4 Power Indices: Banzhaf & Shapley-Shubik in Voting Systems' },
+    { moduleNo: 6, moduleName: 'Applications of Game Theory in Data Science', hours: 7, topics: '6.1 Mechanism Design & Reverse Game Theory\n6.2 Auction Theory: First Price, Second Price (Vickrey), English & Dutch\n6.3 VCG (Vickrey-Clarke-Groves) Mechanism in Ad-Exchange\n6.4 Fair Resource Allocation in Cloud Computing & Distributed Networks' },
+  ];
+
+  // Open Syllabus & Course Outcomes Modal for a Subject
   async function openCourseOutcomesModal(sub: Subject) {
     setTargetSubjectForCo(sub);
+    setActiveSyllabusTab('modules');
     setShowCoModal(true);
     setLoadingCos(true);
+
+    // Load Syllabus Modules & Prerequisites
+    setPrerequisites(sub.prerequisites || (sub.courseCode.toUpperCase() === 'CSC701' ? 'Basic mathematics and Statistical concepts, Linear algebra, Machine Learning' : ''));
+    if (sub.syllabusModules && sub.syllabusModules.length > 0) {
+      setSyllabusModules(sub.syllabusModules);
+    } else if (sub.courseCode.toUpperCase() === 'CSC701') {
+      setSyllabusModules(CSC701_MODULES);
+    } else if (sub.courseCode.toUpperCase() === 'CSDO7023') {
+      setSyllabusModules(CSDO7023_MODULES);
+    } else {
+      setSyllabusModules([
+        { moduleNo: 1, moduleName: 'Module 1: Foundations', hours: Math.round(sub.totalSyllabusHours * 0.2), topics: 'Fundamental principles, terminologies, and introductory concepts.' },
+        { moduleNo: 2, moduleName: 'Module 2: Core Methodology', hours: Math.round(sub.totalSyllabusHours * 0.25), topics: 'Core algorithms, mathematical formulations, and analytical models.' },
+        { moduleNo: 3, moduleName: 'Module 3: Design & Implementation', hours: Math.round(sub.totalSyllabusHours * 0.3), topics: 'System design, optimization techniques, and implementation approaches.' },
+        { moduleNo: 4, moduleName: 'Module 4: Applications & Trends', hours: sub.totalSyllabusHours - (Math.round(sub.totalSyllabusHours * 0.2) + Math.round(sub.totalSyllabusHours * 0.25) + Math.round(sub.totalSyllabusHours * 0.3)), topics: 'Case studies, modern tools, practical applications, and industry trends.' },
+      ]);
+    }
 
     try {
       const q = query(
@@ -323,8 +366,9 @@ export default function AcademicSetupPage() {
           { coNumber: 4, coCode: 'CO4', description: loaded['CO4']?.description || '', syllabusHours: loaded['CO4']?.syllabusHours ?? 10 },
         ]);
       } else {
-        // Default template
-        if (sub.courseCode.toUpperCase() === 'CSDO7023') {
+        if (sub.courseCode.toUpperCase() === 'CSC701') {
+          loadCsc701Template();
+        } else if (sub.courseCode.toUpperCase() === 'CSDO7023') {
           loadCsdo7023Template();
         } else {
           setCoList([
@@ -342,33 +386,46 @@ export default function AcademicSetupPage() {
     }
   }
 
+  function loadCsc701Template() {
+    setCoList([
+      { coNumber: 1, coCode: 'CO1', description: 'Gain basic knowledge of Neural Networks and foundations of deep architectures.', syllabusHours: 4 },
+      { coNumber: 2, coCode: 'CO2', description: 'Acquire in depth understanding of training, optimization and regularization of Deep Neural Networks.', syllabusHours: 16 },
+      { coNumber: 3, coCode: 'CO3', description: 'Design appropriate DNN model for supervised, unsupervised and sequence learning applications.', syllabusHours: 15 },
+      { coNumber: 4, coCode: 'CO4', description: 'Gain familiarity with recent trends, generative adversarial models, and applications of Deep Learning.', syllabusHours: 4 },
+    ]);
+  }
+
   function loadCsdo7023Template() {
     setCoList([
+      { coNumber: 1, coCode: 'CO1', description: 'Analyze and Discuss the notion of a strategic game and equilibria and identify the characteristics of main applications of these concepts.', syllabusHours: 7 },
+      { coNumber: 2, coCode: 'CO2', description: 'Discuss the use of Nash Equilibrium for other problems. Identify key strategic aspects and based on these be able to connect them to appropriate game theoretic concepts given a real world situation.', syllabusHours: 10 },
+      { coNumber: 3, coCode: 'CO3', description: 'Identify some applications that need aspects of Bayesian Games. Implement a typical Virtual Business scenario using Game theory.', syllabusHours: 12 },
+      { coNumber: 4, coCode: 'CO4', description: 'Identify and discuss working principle of Non-Cooperative Games.', syllabusHours: 10 },
+    ]);
+  }
+
+  function handleAddModule() {
+    const nextNo = syllabusModules.length + 1;
+    setSyllabusModules((prev) => [
+      ...prev,
       {
-        coNumber: 1,
-        coCode: 'CO1',
-        description: 'Analyze and Discuss the notion of a strategic game and equilibria and identify the characteristics of main applications of these concepts.',
-        syllabusHours: 7,
-      },
-      {
-        coNumber: 2,
-        coCode: 'CO2',
-        description: 'Discuss the use of Nash Equilibrium for other problems. Identify key strategic aspects and based on these be able to connect them to appropriate game theoretic concepts given a real world situation.',
-        syllabusHours: 10,
-      },
-      {
-        coNumber: 3,
-        coCode: 'CO3',
-        description: 'Identify some applications that need aspects of Bayesian Games. Implement a typical Virtual Business scenario using Game theory.',
-        syllabusHours: 12,
-      },
-      {
-        coNumber: 4,
-        coCode: 'CO4',
-        description: 'Identify and discuss working principle of Non-Cooperative Games.',
-        syllabusHours: 10,
+        moduleNo: nextNo,
+        moduleName: `Module ${nextNo}`,
+        hours: 4,
+        topics: '',
       },
     ]);
+  }
+
+  function handleRemoveModule(idx: number) {
+    if (syllabusModules.length <= 1) {
+      toast.error('At least one syllabus module is required.');
+      return;
+    }
+    const updated = syllabusModules
+      .filter((_, i) => i !== idx)
+      .map((m, i) => ({ ...m, moduleNo: i + 1 }));
+    setSyllabusModules(updated);
   }
 
   function handleAddCo() {
@@ -410,10 +467,45 @@ export default function AcademicSetupPage() {
     setCoList(updated);
   }
 
+  async function handleDraftCosWithAi() {
+    if (!targetSubjectForCo) return;
+    setDraftingCosAi(true);
+    try {
+      const res = await requestAiDraftCourseOutcomes(
+        targetSubjectForCo.courseName,
+        targetSubjectForCo.courseCode,
+        targetSubjectForCo.totalSyllabusHours,
+        syllabusModules
+      );
+      setCoList(
+        res.courseOutcomes.map((c, i) => ({
+          coNumber: ((c.coNumber || i + 1) as 1 | 2 | 3 | 4),
+          coCode: c.coCode,
+          description: c.description,
+          syllabusHours: c.syllabusHours,
+        }))
+      );
+      toast.success('Generated 4 active Bloom\'s-taxonomy COs!');
+    } catch (err: any) {
+      toast.error('AI drafting failed: ' + err.message);
+    } finally {
+      setDraftingCosAi(false);
+    }
+  }
+
   async function handleSaveCourseOutcomes(e: FormEvent) {
     e.preventDefault();
     if (!targetSubjectForCo) return;
 
+    // Validate module hours vs subject total hours
+    const modHours = syllabusModules.reduce((acc, m) => acc + Number(m.hours || 0), 0);
+    if (modHours !== targetSubjectForCo.totalSyllabusHours) {
+      if (!confirm(`Warning: Total Module hours (${modHours} hrs) does not match subject syllabus hours (${targetSubjectForCo.totalSyllabusHours} hrs). Save anyway?`)) {
+        return;
+      }
+    }
+
+    // Validate CO hours vs subject total hours
     const totalHours = coList.reduce((acc, c) => acc + Number(c.syllabusHours || 0), 0);
     if (totalHours !== targetSubjectForCo.totalSyllabusHours) {
       if (!confirm(`Warning: Total CO hours (${totalHours} hrs) does not match subject syllabus hours (${targetSubjectForCo.totalSyllabusHours} hrs). Save anyway?`)) {
@@ -423,6 +515,15 @@ export default function AcademicSetupPage() {
 
     setSavingCos(true);
     try {
+      // 1. Update Subject with syllabusModules & prerequisites
+      const subRef = doc(db, 'subjects', targetSubjectForCo.id);
+      await updateDoc(subRef, {
+        syllabusModules,
+        prerequisites: prerequisites.trim(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // 2. Update Course Outcomes collection
       const batch = writeBatch(db);
       for (const item of coList) {
         const docId = `${targetSubjectForCo.id}_${item.coCode}`;
@@ -447,11 +548,12 @@ export default function AcademicSetupPage() {
         );
       }
       await batch.commit();
-      toast.success(`Saved CO1–CO4 for ${targetSubjectForCo.courseCode}!`);
+
+      toast.success(`Successfully saved Syllabus & CO1–CO4 for ${targetSubjectForCo.courseCode}!`);
       setShowCoModal(false);
     } catch (err: any) {
-      console.error('Error saving course outcomes:', err);
-      toast.error(err?.message || 'Failed to save course outcomes.');
+      console.error('Error saving syllabus & course outcomes:', err);
+      toast.error(err?.message || 'Failed to save syllabus & course outcomes.');
     } finally {
       setSavingCos(false);
     }
@@ -733,10 +835,10 @@ export default function AcademicSetupPage() {
                         type="button"
                         onClick={() => openCourseOutcomesModal(sub)}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition shadow-2xs active:scale-95"
-                        title="Configure Course Outcomes (CO1–CO4)"
+                        title="Configure Official Syllabus Modules & Course Outcomes (CO1–CO4)"
                       >
-                        <Target className="h-3.5 w-3.5 text-brand-600" />
-                        <span>COs (CO1–4)</span>
+                        <BookOpen className="h-3.5 w-3.5 text-brand-600" />
+                        <span>Syllabus & COs</span>
                       </button>
                       <button
                         type="button"
@@ -1033,25 +1135,25 @@ export default function AcademicSetupPage() {
         </div>
       )}
 
-      {/* Modal 4: Course Outcomes (CO1–CO4) Modal */}
+      {/* Modal 4: Official Syllabus & Course Outcomes (CO1–CO4) Modal */}
       {showCoModal && targetSubjectForCo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6">
-          <div className="glass-card max-w-2xl w-full max-h-[88vh] flex flex-col bg-white relative rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            {/* 1. Fixed Modal Header */}
+          <div className="glass-card max-w-4xl w-full max-h-[90vh] flex flex-col bg-white relative rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            {/* 1. Modal Header */}
             <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between shrink-0 bg-white">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700 border border-brand-100 shrink-0">
-                  <Target className="h-5 w-5" />
+                  <BookOpen className="h-5 w-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-slate-900">Course Outcomes Setup</h2>
+                    <h2 className="text-base font-bold text-slate-900">Official Syllabus & Course Outcomes Setup</h2>
                     <span className="badge bg-brand-50 text-brand-700 border border-brand-200 font-mono font-bold">
                       {targetSubjectForCo.courseCode}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    {targetSubjectForCo.courseName} · {targetSubjectForCo.classDivision}
+                    {targetSubjectForCo.courseName} · {targetSubjectForCo.classDivision} · Total {targetSubjectForCo.totalSyllabusHours} Contact Hours
                   </p>
                 </div>
               </div>
@@ -1065,142 +1167,376 @@ export default function AcademicSetupPage() {
               </button>
             </div>
 
+            {/* Tab Switcher */}
+            <div className="px-5 pt-3 pb-0 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => setActiveSyllabusTab('modules')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+                  activeSyllabusTab === 'modules'
+                    ? 'border-brand-600 text-brand-700 bg-white rounded-t-lg'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                <span>1. Syllabus Modules ({syllabusModules.length})</span>
+                {(() => {
+                  const total = syllabusModules.reduce((acc, m) => acc + Number(m.hours || 0), 0);
+                  const isBal = total === targetSubjectForCo.totalSyllabusHours;
+                  return (
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${isBal ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                      {total}h
+                    </span>
+                  );
+                })()}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSyllabusTab('cos')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+                  activeSyllabusTab === 'cos'
+                    ? 'border-brand-600 text-brand-700 bg-white rounded-t-lg'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Target className="h-3.5 w-3.5" />
+                <span>2. Course Outcomes (CO1–CO4)</span>
+                {(() => {
+                  const total = coList.reduce((acc, c) => acc + Number(c.syllabusHours || 0), 0);
+                  const isBal = total === targetSubjectForCo.totalSyllabusHours;
+                  return (
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${isBal ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                      {total}h
+                    </span>
+                  );
+                })()}
+              </button>
+            </div>
+
             {/* 2. Scrollable Body */}
             <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
-              {/* Quick Actions & Hours Bar */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-600">Hours Tally:</span>
-                  {(() => {
-                    const total = coList.reduce((acc, c) => acc + Number(c.syllabusHours || 0), 0);
-                    const target = targetSubjectForCo.totalSyllabusHours;
-                    const matches = total === target;
-                    return (
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
-                          matches
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}
-                      >
-                        {matches ? <Check className="h-3.5 w-3.5" /> : null}
-                        {total} / {target} hrs
-                        {matches ? ' (Balanced)' : ` (${Math.abs(target - total)}h difference)`}
-                      </span>
-                    );
-                  })()}
-                </div>
-
-                {targetSubjectForCo.courseCode.toUpperCase() === 'CSDO7023' && (
-                  <button
-                    type="button"
-                    onClick={loadCsdo7023Template}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 bg-white px-2.5 py-1 rounded-lg border border-brand-200 shadow-2xs hover:bg-brand-50 transition"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-brand-600" />
-                    Load Official CSDO7023 COs
-                  </button>
-                )}
-              </div>
-
-              {/* Loading Indicator */}
               {loadingCos ? (
                 <div className="py-12 text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600 mb-2" />
-                  <p className="text-xs font-medium text-slate-500">Loading Course Outcomes...</p>
+                  <p className="text-xs font-medium text-slate-500">Loading syllabus & course outcomes...</p>
                 </div>
-              ) : (
-                <form id="co-form" onSubmit={handleSaveCourseOutcomes} className="space-y-3.5">
-                  {coList.map((co, idx) => (
-                    <div
-                      key={co.coCode}
-                      className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition shadow-2xs"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-6 w-12 items-center justify-center rounded-md bg-brand-600 text-white font-mono font-bold text-xs shadow-2xs">
-                            {co.coCode}
+              ) : activeSyllabusTab === 'modules' ? (
+                /* TAB 1: SYLLABUS MODULES */
+                <div className="space-y-4">
+                  {/* Presets & Hours Bar */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-600">Module Hours Tally:</span>
+                      {(() => {
+                        const total = syllabusModules.reduce((acc, m) => acc + Number(m.hours || 0), 0);
+                        const target = targetSubjectForCo.totalSyllabusHours;
+                        const matches = total === target;
+                        return (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
+                              matches
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {matches ? <Check className="h-3.5 w-3.5" /> : null}
+                            {total} / {target} hrs
+                            {matches ? ' (Balanced)' : ` (${Math.abs(target - total)}h difference)`}
                           </span>
-                          <span className="text-xs font-bold text-slate-700">Course Outcome {co.coNumber}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1.5">
-                            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                              Hours:
-                            </label>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {targetSubjectForCo.courseCode.toUpperCase() === 'CSC701' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSyllabusModules(CSC701_MODULES);
+                            setPrerequisites('Basic mathematics and Statistical concepts, Linear algebra, Machine Learning');
+                            toast.success('Loaded Mumbai University CSC701 Deep Learning Syllabus!');
+                          }}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 bg-white px-2.5 py-1 rounded-lg border border-brand-200 shadow-2xs hover:bg-brand-50 transition"
+                        >
+                          <Sparkles className="h-3.5 w-3.5 text-brand-600" />
+                          Load CSC701 Preset
+                        </button>
+                      )}
+                      {targetSubjectForCo.courseCode.toUpperCase() === 'CSDO7023' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSyllabusModules(CSDO7023_MODULES);
+                            toast.success('Loaded CSDO7023 Game Theory Syllabus!');
+                          }}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 bg-white px-2.5 py-1 rounded-lg border border-brand-200 shadow-2xs hover:bg-brand-50 transition"
+                        >
+                          <Sparkles className="h-3.5 w-3.5 text-brand-600" />
+                          Load CSDO7023 Preset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Course Prerequisites */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Course Prerequisites (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={prerequisites}
+                      onChange={(e) => setPrerequisites(e.target.value)}
+                      placeholder="e.g. Basic mathematics, Linear algebra, Machine Learning concepts"
+                      className="input-field text-xs"
+                    />
+                  </div>
+
+                  {/* Modules List */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Modular Curriculum Breakdown
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={handleAddModule}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-800 bg-brand-50 border border-brand-200 px-2.5 py-1 rounded-lg transition"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add Module</span>
+                      </button>
+                    </div>
+
+                    {syllabusModules.map((mod, idx) => (
+                      <div
+                        key={mod.moduleNo || idx}
+                        className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition shadow-2xs space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            <span className="flex h-6 px-2 items-center justify-center rounded-md bg-brand-600 text-white font-mono font-bold text-xs shrink-0 shadow-2xs">
+                              M{mod.moduleNo}
+                            </span>
                             <input
-                              type="number"
-                              min="1"
-                              max="40"
+                              type="text"
                               required
-                              value={co.syllabusHours}
+                              value={mod.moduleName}
                               onChange={(e) => {
-                                const val = Number(e.target.value);
-                                setCoList((prev) =>
-                                  prev.map((item, i) => (i === idx ? { ...item, syllabusHours: val } : item))
+                                const val = e.target.value;
+                                setSyllabusModules((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, moduleName: val } : item))
                                 );
                               }}
-                              className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-mono font-bold text-slate-800 text-center focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                              placeholder="Module Title (e.g. Fundamentals of Neural Network)"
+                              className="w-full rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 focus:border-brand-500 focus:outline-none"
                             />
-                            <span className="text-xs text-slate-400 font-mono">hrs</span>
                           </div>
 
-                          {coList.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveCo(idx)}
-                              className="text-slate-300 hover:text-red-600 transition p-1"
-                              title={`Remove ${co.coCode}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                                Hours:
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="40"
+                                required
+                                value={mod.hours}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  setSyllabusModules((prev) =>
+                                    prev.map((item, i) => (i === idx ? { ...item, hours: val } : item))
+                                  );
+                                }}
+                                className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-mono font-bold text-slate-800 text-center focus:border-brand-500 focus:outline-none"
+                              />
+                              <span className="text-xs text-slate-400 font-mono">hrs</span>
+                            </div>
+
+                            {syllabusModules.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveModule(idx)}
+                                className="text-slate-300 hover:text-red-600 transition p-1"
+                                title={`Remove Module ${mod.moduleNo}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <textarea
+                            rows={3}
+                            required
+                            value={mod.topics}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSyllabusModules((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, topics: val } : item))
+                              );
+                            }}
+                            placeholder="Enter topics & subtopics for this module (e.g. 1.1 History of Deep Learning, MLPs, Sigmoid Neurons, Gradient Descent...)"
+                            className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none resize-none leading-relaxed"
+                          />
                         </div>
                       </div>
-
-                      <textarea
-                        required
-                        rows={2}
-                        placeholder={`Enter formal syllabus statement for ${co.coCode}...`}
-                        value={co.description}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setCoList((prev) =>
-                            prev.map((item, i) => (i === idx ? { ...item, description: val } : item))
-                          );
-                        }}
-                        className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
-                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* TAB 2: COURSE OUTCOMES */
+                <div className="space-y-4">
+                  {/* Actions & Hours Bar */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-600">CO Hours Tally:</span>
+                      {(() => {
+                        const total = coList.reduce((acc, c) => acc + Number(c.syllabusHours || 0), 0);
+                        const target = targetSubjectForCo.totalSyllabusHours;
+                        const matches = total === target;
+                        return (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
+                              matches
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {matches ? <Check className="h-3.5 w-3.5" /> : null}
+                            {total} / {target} hrs
+                            {matches ? ' (Balanced)' : ` (${Math.abs(target - total)}h difference)`}
+                          </span>
+                        );
+                      })()}
                     </div>
-                  ))}
 
-                  {/* Add Course Outcome Button */}
-                  {coList.length < 4 ? (
-                    <button
-                      type="button"
-                      onClick={handleAddCo}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-200 hover:border-brand-500 bg-brand-50/30 hover:bg-brand-50/70 py-3 text-xs font-bold text-brand-700 transition"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Course Outcome (CO{coList.length + 1})
-                    </button>
-                  ) : (
-                    <div className="p-2.5 rounded-lg bg-slate-50 text-center text-xs text-slate-500 border border-slate-200">
-                      Maximum 4 Course Outcomes (CO1 to CO4) configured for prototype scope.
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleDraftCosWithAi}
+                        disabled={draftingCosAi}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 bg-white px-2.5 py-1 rounded-lg border border-brand-200 shadow-2xs hover:bg-brand-50 transition"
+                      >
+                        {draftingCosAi ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-brand-600" />}
+                        <span>Auto-Draft COs from Syllabus (AI)</span>
+                      </button>
+
+                      {targetSubjectForCo.courseCode.toUpperCase() === 'CSC701' && (
+                        <button
+                          type="button"
+                          onClick={loadCsc701Template}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 transition"
+                        >
+                          Load CSC701 COs
+                        </button>
+                      )}
+                      {targetSubjectForCo.courseCode.toUpperCase() === 'CSDO7023' && (
+                        <button
+                          type="button"
+                          onClick={loadCsdo7023Template}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 transition"
+                        >
+                          Load CSDO7023 COs
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
 
-                  <p className="text-[11px] text-slate-400 italic">
-                    Note: Course Outcomes configured here will be automatically linked to any teacher assigned to this subject.
-                  </p>
-                </form>
+                  <form id="co-form" onSubmit={handleSaveCourseOutcomes} className="space-y-3.5">
+                    {coList.map((co, idx) => (
+                      <div
+                        key={co.coCode}
+                        className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-6 w-12 items-center justify-center rounded-md bg-brand-600 text-white font-mono font-bold text-xs shadow-2xs">
+                              {co.coCode}
+                            </span>
+                            <span className="text-xs font-bold text-slate-700">Course Outcome {co.coNumber}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                                Hours:
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="40"
+                                required
+                                value={co.syllabusHours}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  setCoList((prev) =>
+                                    prev.map((item, i) => (i === idx ? { ...item, syllabusHours: val } : item))
+                                  );
+                                }}
+                                className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-mono font-bold text-slate-800 text-center focus:border-brand-500 focus:outline-none"
+                              />
+                              <span className="text-xs text-slate-400 font-mono">hrs</span>
+                            </div>
+
+                            {coList.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCo(idx)}
+                                className="text-slate-300 hover:text-red-600 transition p-1"
+                                title={`Remove ${co.coCode}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <textarea
+                          required
+                          rows={2}
+                          placeholder={`Enter formal syllabus statement for ${co.coCode}...`}
+                          value={co.description}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCoList((prev) =>
+                              prev.map((item, i) => (i === idx ? { ...item, description: val } : item))
+                            );
+                          }}
+                          className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none resize-none leading-relaxed"
+                        />
+                      </div>
+                    ))}
+
+                    {coList.length < 4 ? (
+                      <button
+                        type="button"
+                        onClick={handleAddCo}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-200 hover:border-brand-500 bg-brand-50/30 hover:bg-brand-50/70 py-3 text-xs font-bold text-brand-700 transition"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Course Outcome (CO{coList.length + 1})
+                      </button>
+                    ) : (
+                      <div className="p-2.5 rounded-lg bg-slate-50 text-center text-xs text-slate-500 border border-slate-200">
+                        Maximum 4 Course Outcomes (CO1 to CO4) configured for prototype scope.
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-slate-400 italic">
+                      Note: Course Outcomes configured here are strictly bound to NBA OBE requirements and will be synchronized to any teacher assigned to this course.
+                    </p>
+                  </form>
+                </div>
               )}
             </div>
 
             {/* 3. Fixed Modal Footer */}
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
               <span className="text-xs text-slate-500 font-medium">
-                {coList.length} outcome{coList.length !== 1 ? 's' : ''} defined
+                {syllabusModules.length} module{syllabusModules.length !== 1 ? 's' : ''} · {coList.length} outcome{coList.length !== 1 ? 's' : ''} · {targetSubjectForCo.totalSyllabusHours} target hours
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -1211,8 +1547,8 @@ export default function AcademicSetupPage() {
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  form="co-form"
+                  type="button"
+                  onClick={(e) => handleSaveCourseOutcomes(e as any)}
                   disabled={savingCos}
                   className="btn-primary !py-2 !px-4 !text-xs"
                 >
@@ -1221,7 +1557,7 @@ export default function AcademicSetupPage() {
                   ) : (
                     <CheckCircle2 className="h-4 w-4" />
                   )}
-                  Save Course Outcomes
+                  Save Syllabus & COs
                 </button>
               </div>
             </div>

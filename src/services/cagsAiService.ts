@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { openaiClient, OPENAI_MODEL } from '../lib/openai';
 import { ALLOWED_COS, ALLOWED_OUTCOMES } from '../lib/cagsCalculations';
 
+import type { SyllabusModule } from '../types';
+
 // ---------------------------------------------------------------------------
 // Schemas (AI_INTEGRATION.md §2.2 and §4)
 // ---------------------------------------------------------------------------
@@ -37,9 +39,38 @@ export const AiTeachingPlanIctSchema = z.object({
   suggestedRemark: z.string().max(60),
 });
 
+export const AiDraftCoSchema = z.object({
+  coNumber: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  coCode: z.enum(['CO1', 'CO2', 'CO3', 'CO4']),
+  description: z.string().min(10),
+  syllabusHours: z.number().int().positive(),
+});
+
+export const AiDraftCosResponseSchema = z.object({
+  courseOutcomes: z.array(AiDraftCoSchema).length(4),
+});
+
+export const AiGeneratedLectureSchema = z.object({
+  sequenceNo: z.number().int().positive(),
+  chapterNo: z.number().int().positive(),
+  chapterTitle: z.string().min(1),
+  topicTitle: z.string().min(1),
+  mappedCoCode: z.enum(['CO1', 'CO2', 'CO3', 'CO4']),
+  recommendedIct: z.string().min(1),
+  pedagogicalGoal: z.string().optional().default(''),
+});
+
+export const AiFullSyllabusPlanResponseSchema = z.object({
+  lectures: z.array(AiGeneratedLectureSchema),
+});
+
 export type AiCoPoMappingResponse = z.infer<typeof AiCoPoMappingResponseSchema>;
 export type AiActionPlanResponse = z.infer<typeof AiActionPlanResponseSchema>;
 export type AiTeachingPlanIctResponse = z.infer<typeof AiTeachingPlanIctSchema>;
+export type AiDraftCo = z.infer<typeof AiDraftCoSchema>;
+export type AiDraftCosResponse = z.infer<typeof AiDraftCosResponseSchema>;
+export type AiGeneratedLecture = z.infer<typeof AiGeneratedLectureSchema>;
+export type AiFullSyllabusPlanResponse = z.infer<typeof AiFullSyllabusPlanResponseSchema>;
 
 
 // ---------------------------------------------------------------------------
@@ -277,5 +308,250 @@ export async function requestAiTeachingPlanIct(
     specificActivityIdea: `Review core theoretical foundations and solve illustrative problems on ${topicTitle}.`,
     suggestedRemark,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Universal AI Syllabus & Course Outcome Generators
+// ---------------------------------------------------------------------------
+export const DRAFT_COS_SYSTEM_PROMPT = `You are an NBA/AICTE Outcome-Based Education (OBE) curriculum expert.
+Given a university engineering course, its modular syllabus, and total contact hours, draft exactly 4 Course Outcomes (CO1 to CO4).
+Guidelines:
+- Use active Bloom's Taxonomy verbs (e.g., CO1: Understand/Recall, CO2: Analyze/Apply, CO3: Design/Develop, CO4: Evaluate/Synthesize).
+- Allocate syllabusHours for each CO such that CO1 + CO2 + CO3 + CO4 = totalSyllabusHours exactly.
+- Return ONLY valid JSON matching this schema:
+{
+  "courseOutcomes": [
+    { "coNumber": 1, "coCode": "CO1", "description": "...", "syllabusHours": 6 },
+    { "coNumber": 2, "coCode": "CO2", "description": "...", "syllabusHours": 10 },
+    { "coNumber": 3, "coCode": "CO3", "description": "...", "syllabusHours": 13 },
+    { "coNumber": 4, "coCode": "CO4", "description": "...", "syllabusHours": 10 }
+  ]
+}`;
+
+export async function requestAiDraftCourseOutcomes(
+  courseName: string,
+  courseCode: string,
+  totalHours: number,
+  syllabusModules: SyllabusModule[] = []
+): Promise<AiDraftCosResponse> {
+  const modulesSummary = syllabusModules.length > 0
+    ? syllabusModules.map((m) => `Module ${m.moduleNo}: ${m.moduleName} (${m.hours} hrs) - Topics: ${m.topics.slice(0, 150)}`).join('\n')
+    : 'Standard semester curriculum';
+
+  const userPayload = `Course: ${courseCode} - ${courseName}
+Total Syllabus Hours: ${totalHours}
+Syllabus Modules:
+${modulesSummary}
+
+Draft exactly 4 Course Outcomes (CO1 to CO4) ensuring the sum of syllabusHours equals exactly ${totalHours}.`;
+
+  try {
+    const raw = await callJson(DRAFT_COS_SYSTEM_PROMPT, userPayload, 1200);
+    const parsed = AiDraftCosResponseSchema.safeParse(raw);
+    if (parsed.success) {
+      // Validate hour sum matches totalHours exactly
+      const sum = parsed.data.courseOutcomes.reduce((acc, c) => acc + c.syllabusHours, 0);
+      if (sum === totalHours) {
+        return parsed.data;
+      }
+      // Rebalance difference into CO3/CO4
+      const diff = totalHours - sum;
+      parsed.data.courseOutcomes[2].syllabusHours += diff;
+      return parsed.data;
+    }
+  } catch (err) {
+    console.warn('[CAGS AI] Draft COs generation fallback engaged:', err);
+  }
+
+  // Deterministic Fallback based on Bloom's taxonomy & module distribution
+  const h1 = Math.round(totalHours * 0.18);
+  const h2 = Math.round(totalHours * 0.28);
+  const h3 = Math.round(totalHours * 0.30);
+  const h4 = totalHours - (h1 + h2 + h3);
+
+  const m1Title = syllabusModules[0]?.moduleName || 'fundamental principles';
+  const m2Title = syllabusModules[1]?.moduleName || 'theoretical frameworks';
+  const m3Title = syllabusModules[2]?.moduleName || syllabusModules[3]?.moduleName || 'design architectures';
+  const m4Title = syllabusModules[syllabusModules.length - 1]?.moduleName || 'advanced applications';
+
+  return {
+    courseOutcomes: [
+      {
+        coNumber: 1,
+        coCode: 'CO1',
+        description: `Understand and describe foundational concepts and core principles of ${m1Title}.`,
+        syllabusHours: h1,
+      },
+      {
+        coNumber: 2,
+        coCode: 'CO2',
+        description: `Analyze, formulate, and apply mathematical models and algorithms in ${m2Title}.`,
+        syllabusHours: h2,
+      },
+      {
+        coNumber: 3,
+        coCode: 'CO3',
+        description: `Design and evaluate computational systems and optimization techniques for ${m3Title}.`,
+        syllabusHours: h3,
+      },
+      {
+        coNumber: 4,
+        coCode: 'CO4',
+        description: `Synthesize and implement practical applications, modern tools, and recent trends in ${m4Title}.`,
+        syllabusHours: h4,
+      },
+    ],
+  };
+}
+
+export const FULL_SYLLABUS_PLAN_SYSTEM_PROMPT = `You are an NBA/AICTE Outcome-Based Education (OBE) curriculum planner.
+Given a university course, total syllabus hours (N), syllabus modules, and Course Outcomes (CO1..CO4), generate a complete lecture-by-lecture Teaching Plan for EXACTLY N lectures.
+Requirements:
+1. Output EXACTLY N lectures in the array (sequenceNo 1 through N).
+2. Distribute lectures across chapters according to each module's assigned contact hours.
+3. Provide a clear, granular topicTitle for each individual 1-hour session.
+4. Assign mappedCoCode ('CO1' | 'CO2' | 'CO3' | 'CO4') aligned with that chapter's scope.
+5. Recommend an appropriate ICT/pedagogical tool (e.g. "Chalk Board, Presentation", "Colab Notebook / Python Demo", "Online Simulation", "Quiz", "Case Study").
+Return ONLY valid JSON matching this schema:
+{
+  "lectures": [
+    {
+      "sequenceNo": 1,
+      "chapterNo": 1,
+      "chapterTitle": "...",
+      "topicTitle": "...",
+      "mappedCoCode": "CO1",
+      "recommendedIct": "Presentation",
+      "pedagogicalGoal": "..."
+    }
+  ]
+}`;
+
+export async function requestAiFullSyllabusPlan(
+  courseName: string,
+  courseCode: string,
+  totalHours: number,
+  syllabusModules: SyllabusModule[] = [],
+  cos: Array<{ coCode: 'CO1' | 'CO2' | 'CO3' | 'CO4'; description: string; syllabusHours: number }> = []
+): Promise<AiFullSyllabusPlanResponse> {
+  const modulesSummary = syllabusModules.length > 0
+    ? syllabusModules.map((m) => `Module ${m.moduleNo} (${m.hours} hrs): ${m.moduleName}\nContent: ${m.topics}`).join('\n\n')
+    : `Course Overview: ${courseName} (Standard curriculum)`;
+
+  const cosSummary = cos.length > 0
+    ? cos.map((c) => `${c.coCode} (${c.syllabusHours} hrs): ${c.description}`).join('\n')
+    : 'CO1 to CO4 mapped sequentially';
+
+  const userPayload = `Course: ${courseCode} - ${courseName}
+Total Contact Hours: ${totalHours} lectures
+Modules Breakdown:
+${modulesSummary}
+
+Course Outcomes:
+${cosSummary}
+
+Generate exactly ${totalHours} sequential lecture entries (sequenceNo 1 to ${totalHours}).`;
+
+  try {
+    const raw = await callJson(FULL_SYLLABUS_PLAN_SYSTEM_PROMPT, userPayload, 3800);
+    const parsed = AiFullSyllabusPlanResponseSchema.safeParse(raw);
+    if (parsed.success && parsed.data.lectures.length === totalHours) {
+      return parsed.data;
+    }
+    if (parsed.success && parsed.data.lectures.length > 0) {
+      // If slight discrepancy in count, slice or pad to totalHours
+      const lectures = parsed.data.lectures.slice(0, totalHours);
+      while (lectures.length < totalHours) {
+        const last = lectures[lectures.length - 1];
+        lectures.push({
+          sequenceNo: lectures.length + 1,
+          chapterNo: last.chapterNo,
+          chapterTitle: last.chapterTitle,
+          topicTitle: `Advanced Case Studies & Problem Solving in ${last.chapterTitle}`,
+          mappedCoCode: last.mappedCoCode,
+          recommendedIct: 'Presentation, Quiz',
+          pedagogicalGoal: 'Reinforce analytical concepts',
+        });
+      }
+      return { lectures };
+    }
+  } catch (err) {
+    console.warn('[CAGS AI] Full syllabus plan AI generation fallback engaged:', err);
+  }
+
+  // Deterministic Fallback: Distribute module topics across exact hour counts
+  const lectures: AiGeneratedLecture[] = [];
+  let seq = 1;
+
+  // If no modules defined, create a generic module set
+  const modulesToUse: SyllabusModule[] = syllabusModules.length > 0
+    ? syllabusModules
+    : [
+        { moduleNo: 1, moduleName: 'Foundations and Overview', hours: Math.round(totalHours * 0.2), topics: 'Introduction, Historical Context, Basic Terminologies, Core Frameworks' },
+        { moduleNo: 2, moduleName: 'Theoretical Modeling & Analysis', hours: Math.round(totalHours * 0.25), topics: 'Formulation, Mathematical Models, Analytical Methods, Evaluation' },
+        { moduleNo: 3, moduleName: 'Design and Optimization', hours: Math.round(totalHours * 0.3), topics: 'Architectures, Algorithms, Optimization Techniques, Performance Metrics' },
+        { moduleNo: 4, moduleName: 'Applications and Emerging Trends', hours: totalHours - (Math.round(totalHours * 0.2) + Math.round(totalHours * 0.25) + Math.round(totalHours * 0.3)), topics: 'Case Studies, Practical Implementations, Industry Tools, Future Trends' },
+      ];
+
+  // Map COs based on cumulative hours or module index
+  for (let mIdx = 0; mIdx < modulesToUse.length; mIdx++) {
+    const mod = modulesToUse[mIdx];
+    const modHours = mod.hours > 0 ? mod.hours : 1;
+    
+    // Parse subtopics from topics string (split by numbered items like 1.1, newlines, semicolons or commas)
+    const rawSubtopics = mod.topics
+      .split(/\n|;|\d+\.\d+\s+/)
+      .map((s) => s.trim().replace(/^[-*•]\s*/, ''))
+      .filter((s) => s.length > 3);
+
+    // Map module to CO: Module 1 -> CO1, Module 2 -> CO2, Module 3/4 -> CO3, Module 5/6 -> CO4
+    let coCode: 'CO1' | 'CO2' | 'CO3' | 'CO4' = 'CO1';
+    const progressRatio = seq / totalHours;
+    if (progressRatio <= 0.25) coCode = 'CO1';
+    else if (progressRatio <= 0.55) coCode = 'CO2';
+    else if (progressRatio <= 0.85) coCode = 'CO3';
+    else coCode = 'CO4';
+
+    for (let h = 0; h < modHours && seq <= totalHours; h++) {
+      let topic = rawSubtopics[h];
+      if (!topic) {
+        if (h === 0) topic = `Overview & Core Principles of ${mod.moduleName}`;
+        else if (h === modHours - 1) topic = `Tutorial & Problem Solving: ${mod.moduleName}`;
+        else topic = `${mod.moduleName} - Topic ${h + 1}`;
+      }
+
+      let ict = 'Chalk Board, Presentation';
+      if (/tutorial|problem|numerical/i.test(topic)) ict = 'Chalk Board';
+      else if (/demo|tool|notebook|python|code/i.test(topic)) ict = 'Colab Notebook / Python Demo';
+      else if (/quiz|review|summary/i.test(topic)) ict = 'Quiz, Presentation';
+
+      lectures.push({
+        sequenceNo: seq,
+        chapterNo: mod.moduleNo,
+        chapterTitle: mod.moduleName,
+        topicTitle: topic,
+        mappedCoCode: coCode,
+        recommendedIct: ict,
+        pedagogicalGoal: `Understand and apply concepts of ${topic}`,
+      });
+      seq++;
+    }
+  }
+
+  // Ensure total count matches totalHours exactly
+  while (lectures.length < totalHours) {
+    const last = lectures[lectures.length - 1];
+    lectures.push({
+      sequenceNo: lectures.length + 1,
+      chapterNo: last.chapterNo,
+      chapterTitle: last.chapterTitle,
+      topicTitle: `Comprehensive Review and Case Study on ${last.chapterTitle}`,
+      mappedCoCode: 'CO4',
+      recommendedIct: 'Presentation, Quiz',
+      pedagogicalGoal: 'Consolidate course learnings',
+    });
+  }
+
+  return { lectures: lectures.slice(0, totalHours) };
 }
 

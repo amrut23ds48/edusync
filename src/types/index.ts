@@ -56,6 +56,13 @@ export interface ClassCohort {
   updatedAt?: FirestoreDate;
 }
 
+export interface SyllabusModule {
+  moduleNo: number; // e.g. 1, 2, 3...
+  moduleName: string; // e.g. "Fundamentals of Neural Network"
+  hours: number; // e.g. 4
+  topics: string; // Detailed subtopics line-separated or paragraph
+}
+
 export interface Subject {
   id: string; // e.g. "subj_csdo7023_2025"
   departmentId: string;
@@ -70,6 +77,10 @@ export interface Subject {
   conductedSessionsCount: number;
   assignedTeacherUid?: string;
   assignedTeacherName?: string;
+  prerequisites?: string;
+  syllabusModules?: SyllabusModule[];
+  courseObjectives?: string[];
+  textbooks?: string[];
   status: 'active' | 'archived';
   createdAt?: FirestoreDate;
   updatedAt?: FirestoreDate;

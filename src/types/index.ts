@@ -281,3 +281,157 @@ export interface CagsActionPlanDocument {
   updatedAt?: FirestoreDate;
   updatedBy?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Milestone 5: Lecture Attendance, AI Teaching Plan Sync, Sheet 1 & Monthly Reports
+// ---------------------------------------------------------------------------
+
+export type TeachingPlanStatus = 'pending' | 'completed';
+export type MappedCoOption = '-' | 'CO1' | 'CO2' | 'CO3' | 'CO4';
+
+export interface TeachingPlanEntry {
+  id: string; // e.g. `tp_${subjectId}_lect_${seq}`
+  academicYearId: string;
+  classId: string;
+  subjectId: string;
+  teacherUid: string;
+  sequenceNo: number;
+  chapterNo: number;
+  chapterTitle: string;
+  topicTitle: string;
+  lecturesRequired: number;
+  mappedCoCode: MappedCoOption;
+  plannedDate: string; // "YYYY-MM-DD" (PCD)
+  actualDate: string | null; // "YYYY-MM-DD" (ACD)
+  ictToolUsed: string;
+  aiSuggestedIct?: string;
+  remark: string;
+  linkedAttendanceSessionId?: string | null;
+  status: TeachingPlanStatus;
+  createdAt?: FirestoreDate;
+  updatedAt?: FirestoreDate;
+  updatedBy?: string;
+}
+
+export type LectureMode = 'scheduled' | 'extra' | 'online' | 'cancelled';
+export type AttendanceSessionStatus = 'completed' | 'cancelled';
+
+export interface AttendanceSession {
+  id: string; // `${subjectId}_${lectureDate}_${startTime}`
+  academicYearId: string;
+  classId: string;
+  semesterNumber: number;
+  subjectId: string;
+  teacherUid: string;
+  timetableSlotId: string | null;
+  lectureMode: LectureMode;
+  lectureDate: string; // "YYYY-MM-DD"
+  monthKey: string; // "YYYY-MM"
+  startTime: string; // "HH:MM"
+  endTime: string; // "HH:MM"
+  teachingPlanEntryId: string | null;
+  topicCovered: string;
+  mappedCoCode: MappedCoOption;
+  ictToolUsed: string;
+  remark: string;
+  totalStudents: number;
+  presentCount: number;
+  absentCount: number;
+  attendancePercent: number;
+  records: Record<string, 'P' | 'A'>; // Keyed by student rollNo
+  status: AttendanceSessionStatus;
+  createdAt?: FirestoreDate;
+  createdBy?: string;
+  updatedAt?: FirestoreDate;
+  updatedBy?: string;
+}
+
+export interface StudentMonthlyTotal {
+  attended: number;
+  conducted: number;
+  percent: number;
+}
+
+export interface MonthlyReportDocument {
+  id: string; // `${subjectId}_${monthKey}`
+  academicYearId: string;
+  classId: string;
+  subjectId: string;
+  teacherUid: string;
+  monthKey: string; // "YYYY-MM"
+  monthLabel: string; // e.g. "August 2026"
+  scheduledLecturesCount: number;
+  conductedLecturesCount: number;
+  extraLecturesCount: number;
+  cancelledLecturesCount: number;
+  averageAttendancePercent: number;
+  topicsCompletedCount: number;
+  studentTotals: Record<string, StudentMonthlyTotal>;
+  studentsBelow50Percent: number;
+  studentsAbove60Percent: number;
+  lastCalculatedAt?: FirestoreDate;
+  updatedBy?: string;
+}
+
+export interface SyllabusCompletionStats {
+  totalPlannedSessions: number;
+  conductedSessions: number;
+  pendingSessions: number;
+  completionPercent: number;
+}
+
+export interface CumulativeAttendanceStats {
+  totalConducted: number;
+  averageAttendancePercent: number;
+  totalStudents: number;
+  studentsBelow50Percent: number;
+  studentsAbove60Percent: number;
+  studentCumulativeMap: Record<string, StudentMonthlyTotal>;
+}
+
+export interface UnitTestMetric {
+  averageMarks: number;
+  studentsAbove15?: number;
+  studentsAbove12?: number;
+  studentsBelow8?: number;
+  studentsBelow10?: number;
+  percentPassed: number;
+}
+
+export interface CagsCompletionChecklist {
+  studentListImported: boolean;
+  coPoMappingApproved: boolean;
+  mappingCalculationVerified: boolean;
+  coa04Configured: boolean;
+  actionPlanCompleted: boolean;
+}
+
+export interface SubjectDashboardStats {
+  subjectId: string;
+  academicYearId: string;
+  classId: string;
+  teacherUid: string;
+  syllabusCompletion: SyllabusCompletionStats;
+  cumulativeAttendance: CumulativeAttendanceStats;
+  unitTestStatus?: {
+    ut1: UnitTestMetric;
+    ut2: UnitTestMetric;
+  };
+  cagsCompletionChecklist: CagsCompletionChecklist;
+  updatedAt?: FirestoreDate;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actorUid: string;
+  actorRole: UserRole;
+  action: string;
+  targetCollection: string;
+  targetDocumentId: string;
+  academicYearId?: string;
+  classId?: string;
+  subjectId?: string;
+  summary: string;
+  timestamp?: FirestoreDate;
+}
+

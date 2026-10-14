@@ -11,8 +11,12 @@ import AcademicSetupPage from './pages/admin/AcademicSetupPage';
 import TeachersManagementPage from './pages/admin/TeachersManagementPage';
 import GlobalOutcomesPage from './pages/admin/GlobalOutcomesPage';
 import TimetableManagerPage from './pages/admin/TimetableManagerPage';
+import AdminReportsPage from './pages/admin/AdminReportsPage';
 import TeacherHomeSelector from './pages/teacher/TeacherHomeSelector';
 import SubjectWorkspacePage from './pages/teacher/SubjectWorkspacePage';
+import TeachingPlanPage from './pages/teacher/TeachingPlanPage';
+import AttendanceSessionPage from './pages/teacher/AttendanceSessionPage';
+import MonthlyReportPage from './pages/teacher/MonthlyReportPage';
 
 export default function App() {
   return (
@@ -38,6 +42,7 @@ export default function App() {
             <Route path="teachers" element={<TeachersManagementPage />} />
             <Route path="outcomes" element={<GlobalOutcomesPage />} />
             <Route path="timetables" element={<TimetableManagerPage />} />
+            <Route path="reports" element={<AdminReportsPage />} />
           </Route>
 
           {/* Teacher Routes */}
@@ -58,9 +63,34 @@ export default function App() {
             }
           />
           <Route
+            path="/teacher/subject/:subjectId/teaching-plan"
+            element={
+              <ProtectedRoute allowedRoles={['teacher', 'super_admin']}>
+                <TeachingPlanPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/subject/:subjectId/attendance"
+            element={
+              <ProtectedRoute allowedRoles={['teacher', 'super_admin']}>
+                <AttendanceSessionPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/subject/:subjectId/monthly-report"
+            element={
+              <ProtectedRoute allowedRoles={['teacher', 'super_admin']}>
+                <MonthlyReportPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/teacher/subject/:subjectId"
             element={<Navigate to="cags" replace />}
           />
+
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />

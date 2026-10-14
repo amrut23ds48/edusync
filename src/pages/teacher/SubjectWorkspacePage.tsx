@@ -12,16 +12,18 @@ import {
   CalendarCheck,
   BookMarked,
   FileBarChart2,
-  Sparkles
 } from 'lucide-react';
+
 import { useAcademic } from '../../context/AcademicContext';
 import ContextBreadcrumb from '../../components/layout/ContextBreadcrumb';
+import Tab1Dashboard from '../../components/cags/Tab1Dashboard';
 import Tab2StudentList from '../../components/cags/Tab2StudentList';
 import Tab3CoPoMapping from '../../components/cags/Tab3CoPoMapping';
 import Tab4MappingCalc from '../../components/cags/Tab4MappingCalc';
 import Tab5Coa04Settings from '../../components/cags/Tab5Coa04Settings';
 import Tab6CoActionPlan from '../../components/cags/Tab6CoActionPlan';
 import { CagsWorkspaceProvider } from '../../context/CagsWorkspaceContext';
+
 
 export type CagsTab = 'dashboard' | 'students' | 'copo' | 'mapping-calc' | 'coa04' | 'action-plan';
 
@@ -89,13 +91,14 @@ export default function SubjectWorkspacePage() {
   }
 
   const tabs: { id: CagsTab; label: string; icon: any; sheet: string; status: 'active' | 'upcoming' }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, sheet: 'Sheet 1', status: 'upcoming' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, sheet: 'Sheet 1', status: 'active' },
     { id: 'students', label: 'List of Students', icon: Users, sheet: 'Sheet 2', status: 'active' },
     { id: 'copo', label: 'CO-PO Mapping', icon: GitMerge, sheet: 'Sheet 3', status: 'active' },
     { id: 'mapping-calc', label: 'Mapping Calculation', icon: Calculator, sheet: 'Sheet 4', status: 'active' },
     { id: 'coa04', label: 'COA-04', icon: Sliders, sheet: 'Sheet 5', status: 'active' },
     { id: 'action-plan', label: 'COs Action Plan', icon: Target, sheet: 'Sheet 6', status: 'active' },
   ];
+
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
@@ -186,30 +189,9 @@ export default function SubjectWorkspacePage() {
         {/* Tab 2: List of Students (Milestone 3 active delivery) */}
         {activeTab === 'students' && <Tab2StudentList />}
 
-        {/* Tab 1: Dashboard (Milestone 5) */}
-        {activeTab === 'dashboard' && (
-          <div className="glass-card p-8 text-center max-w-2xl mx-auto">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-              <LayoutDashboard className="h-7 w-7" />
-            </div>
-            <span className="badge bg-brand-50 text-brand-700 border border-brand-200 text-xs mb-2">
-              Sheet 1 · Milestone 5
-            </span>
-            <h3 className="text-lg font-bold text-slate-900">CAGS Executive Dashboard</h3>
-            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
-              Sheet 1 provides the high-level course overview, syllabus completion metrics ({activeSubject?.totalSyllabusHours || 39} hours planned), average lecture attendance percentage, count of students below 50% & above 60%, and real-time status of CO-PO articulations.
-            </p>
-            <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-slate-200 text-left text-xs space-y-2">
-              <div className="flex items-center gap-2 font-semibold text-slate-700">
-                <Sparkles className="h-4 w-4 text-brand-600" />
-                <span>Upcoming in Milestone 5:</span>
-              </div>
-              <p className="text-slate-500">
-                Synchronized automatically via atomic writes whenever lecture attendance is submitted or revised.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Tab 1: Dashboard (Sheet 1) */}
+        {activeTab === 'dashboard' && <Tab1Dashboard />}
+
 
         {/* Tab 3: CO-PO Mapping (Milestone 4) */}
         {activeTab === 'copo' && <Tab3CoPoMapping />}

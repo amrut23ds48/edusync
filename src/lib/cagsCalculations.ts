@@ -254,3 +254,166 @@ export function enforceMinimumMappingCoverage(matrix: CagsMatrix, minPercent = 0
   return updated;
 }
 
+// ---------------------------------------------------------------------------
+// Milestone 5: Lecture Attendance & Monthly Reporting Calculations
+// ---------------------------------------------------------------------------
+
+export interface TimetableSlotLike {
+  dayOfWeek: number;
+  effectiveFrom: string;
+  effectiveTo: string;
+  status: string;
+}
+
+/**
+ * Counts the scheduled lecture slots in a month based on active timetable entries.
+ * Skips Sundays (dayOfWeek === 0).
+ */
+export function countScheduledLecturesInMonth(
+  timetableSlots: TimetableSlotLike[],
+  monthKey: string // "YYYY-MM"
+): number {
+  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return 0;
+  const [yearStr, monthStr] = monthKey.split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1; // 0-indexed for JS Date
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+  let scheduledCount = 0;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateObj = new Date(year, monthIndex, day);
+    const isoDate = `${monthKey}-${String(day).padStart(2, '0')}`;
+    const jsDay = dateObj.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+    if (jsDay === 0) continue; // Skip Sundays
+
+    for (const slot of timetableSlots) {
+      if (
+        slot.status === 'active' &&
+        slot.dayOfWeek === jsDay &&
+        isoDate >= slot.effectiveFrom &&
+        isoDate <= slot.effectiveTo
+      ) {
+        scheduledCount++;
+      }
+    }
+  }
+  return scheduledCount;
+}
+
+export interface SessionMetrics {
+  presentCount: number;
+  absentCount: number;
+  attendancePercent: number;
+}
+
+/**
+ * Computes single lecture session attendance metrics.
+ */
+export function computeSessionAttendanceMetrics(
+  records: Record<string, 'P' | 'A'>,
+  totalStudents: number,
+  isCompleted: boolean = true
+): SessionMetrics {
+  if (!isCompleted || totalStudents <= 0) {
+    return { presentCount: 0, absentCount: 0, attendancePercent: 0 };
+  }
+  const presentCount = Object.values(records).filter((v) => v === 'P').length;
+  const absentCount = Math.max(0, totalStudents - presentCount);
+  const attendancePercent = Number(((presentCount / totalStudents) * 100).toFixed(1));
+  return { presentCount, absentCount, attendancePercent };
+}
+
+export interface StudentAttendanceSummary {
+  attended: number;
+  conducted: number;
+  percent: number;
+}
+
+export interface AttendanceSessionLike {
+  status: string;
+  records?: Record<string, 'P' | 'A'>;
+}
+
+/**
+ * Computes student-wise attendance records and percentages across completed sessions.
+ */
+export function computeStudentAttendanceMap(
+  sessions: AttendanceSessionLike[],
+  activeStudentRollNos: string[]
+): Record<string, StudentAttendanceSummary> {
+  const completedSessions = sessions.filter((s) => s.status === 'completed');
+  const conducted = completedSessions.length;
+  const summary: Record<string, StudentAttendanceSummary> = {};
+
+  for (const rollNo of activeStudentRollNos) {
+    if (conducted === 0) {
+      summary[rollNo] = { attended: 0, conducted: 0, percent: 0 };
+      continue;
+    }
+    let attended = 0;
+    for (const s of completedSessions) {
+      if (s.records && s.records[rollNo] === 'P') {
+        attended++;
+      }
+    }
+    const percent = Number(((attended / conducted) * 100).toFixed(2));
+    summary[rollNo] = { attended, conducted, percent };
+  }
+
+  return summary;
+}
+
+export interface ThresholdCounters {
+  studentsBelow50Percent: number; // strictly < 50.0%
+  studentsAbove60Percent: number; // strictly > 60.0%
+}
+
+/**
+ * Computes defaulters (< 50%) and satisfactory (> 60%) counts from student summary map.
+ */
+export function computeDefaultersAndSatisfactory(
+  studentMap: Record<string, { percent: number }>
+): ThresholdCounters {
+  let studentsBelow50Percent = 0;
+  let studentsAbove60Percent = 0;
+
+  for (const student of Object.values(studentMap)) {
+    if (student.percent < 50.0) {
+      studentsBelow50Percent++;
+    }
+    if (student.percent > 60.0) {
+      studentsAbove60Percent++;
+    }
+  }
+
+  return { studentsBelow50Percent, studentsAbove60Percent };
+}
+
+/**
+ * Computes average attendance percentage across all enrolled students and completed sessions.
+ */
+export function computeAverageAttendancePercent(
+  studentMap: Record<string, { attended: number }>,
+  totalStudents: number,
+  conductedSessions: number
+): number {
+  if (totalStudents <= 0 || conductedSessions <= 0) return 0;
+  const totalAttended = Object.values(studentMap).reduce((sum, s) => sum + s.attended, 0);
+  const totalPossible = totalStudents * conductedSessions;
+  return Number(((totalAttended / totalPossible) * 100).toFixed(1));
+}
+
+/**
+ * Formats "YYYY-MM" into a readable month label like "August 2026".
+ */
+export function formatMonthLabel(monthKey: string): string {
+  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return monthKey || '';
+  const [yearStr, monthStr] = monthKey.split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  const date = new Date(year, monthIndex, 1);
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+

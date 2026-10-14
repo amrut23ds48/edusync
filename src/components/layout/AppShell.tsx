@@ -7,7 +7,8 @@ import {
   Award, 
   CalendarClock, 
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  FileBarChart2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -21,7 +22,9 @@ export default function AppShell() {
     { to: '/admin/teachers', label: 'Teachers & Assignments', icon: Users },
     { to: '/admin/outcomes', label: 'Global Outcomes', icon: Award },
     { to: '/admin/timetables', label: 'Timetables', icon: CalendarClock },
+    { to: '/admin/reports', label: 'Reports & Delivery', icon: FileBarChart2 },
   ];
+
 
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans text-slate-800">

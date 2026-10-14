@@ -31,8 +31,16 @@ export const AiActionPlanResponseSchema = z.object({
   ),
 });
 
+export const AiTeachingPlanIctSchema = z.object({
+  recommendedIct: z.string().min(2).max(60),
+  specificActivityIdea: z.string().max(200),
+  suggestedRemark: z.string().max(60),
+});
+
 export type AiCoPoMappingResponse = z.infer<typeof AiCoPoMappingResponseSchema>;
 export type AiActionPlanResponse = z.infer<typeof AiActionPlanResponseSchema>;
+export type AiTeachingPlanIctResponse = z.infer<typeof AiTeachingPlanIctSchema>;
+
 
 // ---------------------------------------------------------------------------
 // Payloads (course-level data only: zero student PII)
@@ -107,6 +115,35 @@ export function buildActionPlanUserPayload(courseName: string, cos: AiCoInput[])
   return {
     courseName,
     courseOutcomes: cos.map((c) => ({ coCode: c.coCode, description: c.description })),
+  };
+}
+
+export const TEACHING_PLAN_ICT_SYSTEM_PROMPT = `You are an academic teaching-plan assistant for an engineering faculty member.
+Given a course name, chapter title, lecture topic, mapped CO, and lecture mode ("scheduled", "extra", or "online"), suggest:
+1. "recommendedIct": One concise ICT delivery method aligned with CAGS workbook conventions: "Chalk Board", "Presentation", "Chalk Board, Presentation", "Online Tool", "Flipped", "Quiz", or "PPT". (If lectureMode is "online", prefer "Online Tool" or "Presentation").
+2. "specificActivityIdea": A 1-sentence practical classroom or tool idea for teaching this specific topic.
+3. "suggestedRemark": If lectureMode is "extra", return "Taken Extra Lecture". If lectureMode is "online", return "Taken Online Lecture". Otherwise return "".
+
+Return ONLY valid JSON:
+{
+  "recommendedIct": "...",
+  "specificActivityIdea": "...",
+  "suggestedRemark": "..."
+}`;
+
+export function buildTeachingPlanIctUserPayload(
+  courseName: string,
+  chapterTitle: string,
+  topicTitle: string,
+  mappedCoCode: string,
+  lectureMode: 'scheduled' | 'extra' | 'online' | 'cancelled'
+) {
+  return {
+    courseName,
+    chapterTitle,
+    topicTitle,
+    mappedCoCode,
+    lectureMode: lectureMode === 'cancelled' ? 'scheduled' : lectureMode,
   };
 }
 
@@ -193,3 +230,52 @@ export async function requestAiActionPlans(
   if (!parsed.success) throw new AiUnavailableError('AI returned an invalid response format');
   return parsed.data;
 }
+
+/**
+ * AI-assisted ICT recommendation and remark generator for teaching plan entries
+ * and lecture attendance sessions.
+ */
+export async function requestAiTeachingPlanIct(
+  courseName: string,
+  chapterTitle: string,
+  topicTitle: string,
+  mappedCoCode: string,
+  lectureMode: 'scheduled' | 'extra' | 'online' | 'cancelled' = 'scheduled'
+): Promise<AiTeachingPlanIctResponse> {
+  // If OpenAI is unavailable or errors, use pedagogical heuristics fallback
+  try {
+    const raw = await callJson(
+      TEACHING_PLAN_ICT_SYSTEM_PROMPT,
+      buildTeachingPlanIctUserPayload(courseName, chapterTitle, topicTitle, mappedCoCode, lectureMode),
+      600
+    );
+    const parsed = AiTeachingPlanIctSchema.safeParse(raw);
+    if (parsed.success) {
+      return parsed.data;
+    }
+  } catch (err) {
+    console.warn('[CAGS AI] ICT generation fallback engaged:', err);
+  }
+
+  // Fallback defaults aligned with CAGS institutional conventions
+  let recommendedIct = 'Chalk Board, Presentation';
+  if (lectureMode === 'online') {
+    recommendedIct = 'Online Tool';
+  } else if (/quiz|test|assessment/i.test(topicTitle)) {
+    recommendedIct = 'Quiz';
+  } else if (/case study|discussion|flipped/i.test(topicTitle)) {
+    recommendedIct = 'Flipped';
+  }
+
+  let suggestedRemark = '';
+  if (lectureMode === 'extra') suggestedRemark = 'Taken Extra Lecture';
+  if (lectureMode === 'online') suggestedRemark = 'Taken Online Lecture';
+  if (lectureMode === 'cancelled') suggestedRemark = 'Lecture Cancelled';
+
+  return {
+    recommendedIct,
+    specificActivityIdea: `Review core theoretical foundations and solve illustrative problems on ${topicTitle}.`,
+    suggestedRemark,
+  };
+}
+

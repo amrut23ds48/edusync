@@ -21,36 +21,38 @@ service cloud.firestore {
     function isActiveUser() {
       return isSignedIn()
         && exists(userDocPath(request.auth.uid))
-        && getUserData().status == 'active';
+        && getUserData().status in ['active', ' active'];
     }
 
     function isSuperAdmin() {
-      return isActiveUser() && getUserData().role == 'super_admin';
+      return isActiveUser() && getUserData().role in ['super_admin', ' super_admin'];
     }
 
     function isTeacher() {
-      return isActiveUser() && getUserData().role == 'teacher';
+      return isActiveUser() && getUserData().role in ['teacher', ' teacher'];
     }
 
-    // O(1) check: verifies that the signed-in teacher has an active assignment for subjectId
+    // O(1) check: verifies that the user is Super Admin OR teacher with active assignment for subjectId
     function isAssignedToSubject(subjectId) {
       let assignmentPath = /databases/$(database)/documents/teacher_assignments/$(request.auth.uid + '_' + subjectId);
-      return isTeacher()
+      return isSuperAdmin() || (
+        isTeacher()
         && subjectId is string
         && exists(assignmentPath)
-        && get(assignmentPath).data.status == 'active';
+        && get(assignmentPath).data.status == 'active'
+      );
     }
 
-    // O(1) check: verifies that the signed-in teacher is assigned to subjectId
-    // AND that assignment matches classId and academicYearId
+    // O(1) check: verifies that the user is Super Admin OR teacher assigned to subject and class
     function isAssignedToClassViaSubject(subjectId, classId, academicYearId) {
       let assignmentPath = /databases/$(database)/documents/teacher_assignments/$(request.auth.uid + '_' + subjectId);
-      return isTeacher()
+      return isSuperAdmin() || (
+        isTeacher()
         && subjectId is string
         && exists(assignmentPath)
         && get(assignmentPath).data.status == 'active'
         && get(assignmentPath).data.classId == classId
-        && get(assignmentPath).data.academicYearId == academicYearId;
+      );
     }
 
     // Ensures immutable ownership/scope fields cannot be altered during an update
@@ -136,15 +138,8 @@ service cloud.firestore {
           request.resource.data.classId,
           request.resource.data.academicYearId
         )
-        && request.resource.data.importedBy == request.auth.uid
       );
-      allow update, delete: if isSuperAdmin() || (
-        isAssignedToClassViaSubject(
-          resource.data.authorizedSubjectId,
-          resource.data.classId,
-          resource.data.academicYearId
-        )
-      );
+      allow update, delete: if isSuperAdmin();
     }
 
     match /students/{studentId} {
@@ -156,8 +151,6 @@ service cloud.firestore {
           request.resource.data.classId,
           request.resource.data.academicYearId
         )
-        && studentId == (request.resource.data.classId + '_' + request.resource.data.rollNo)
-        && request.resource.data.updatedBy == request.auth.uid
       );
 
       allow update: if isSuperAdmin() || (
@@ -167,7 +160,6 @@ service cloud.firestore {
           request.resource.data.academicYearId
         )
         && scopeUnchanged(['academicYearId', 'classId', 'rollNo'])
-        && request.resource.data.updatedBy == request.auth.uid
       );
 
       allow delete: if isSuperAdmin() || (

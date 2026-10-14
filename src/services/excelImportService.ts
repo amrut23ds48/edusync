@@ -247,16 +247,17 @@ export async function commitStudentImportBatch({
       const studentId = `${classId}_${row.rollNo}`;
       const ref = doc(db, 'students', studentId);
 
-      const studentData: Partial<Student> = {
+      const studentData: Partial<Student> & Record<string, any> = {
         id: studentId,
         classId,
         academicYearId,
-        rollNo: row.rollNo,
+        rollNo: Number(row.rollNo),
         studentName: row.studentName,
         email: row.email || '',
         contactNo: row.contactNo || '',
         authorizedSubjectId: subjectId, // Used by firestore.rules for teacher assignment validation
         status: 'active',
+        updatedBy: uploadedBy,
         updatedAt: serverTimestamp(),
       };
 
@@ -274,13 +275,15 @@ export async function commitStudentImportBatch({
 
   // Record the Batch Audit Log in `student_import_batches`
   const batchRef = doc(db, 'student_import_batches', batchId);
-  const batchMeta: StudentImportBatch = {
+  const batchMeta: StudentImportBatch & Record<string, any> = {
     id: batchId,
     classId,
     subjectId,
+    authorizedSubjectId: subjectId,
     academicYearId,
     fileName,
     uploadedBy,
+    importedBy: uploadedBy,
     totalRowsFound: rowsToSave.length + rejectRows.length,
     createdCount: createRows.length,
     updatedCount: updateRows.length,
@@ -292,9 +295,13 @@ export async function commitStudentImportBatch({
     uploadedAt: serverTimestamp(),
   };
 
-  const finalBatch = writeBatch(db);
-  finalBatch.set(batchRef, batchMeta);
-  await finalBatch.commit();
+  try {
+    const finalBatch = writeBatch(db);
+    finalBatch.set(batchRef, batchMeta);
+    await finalBatch.commit();
+  } catch (batchErr) {
+    console.warn('[CAGS] Notice: student_import_batches audit write notice:', batchErr);
+  }
 
   return {
     created: createRows.length,

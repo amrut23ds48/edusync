@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as XLSX from 'xlsx';
 import { parseStudentRoster, generateStudentTemplateWorkbook } from '../services/excelImportService';
 import type { TeacherAssignment, Student, LearnerCategory } from '../types';
@@ -139,6 +141,32 @@ describe('Milestone 3 Comprehensive Verification Gates (M3-V1 to M3-V5)', () => 
       expect(parsed.createRows[0].studentName).toBe('Aarav Sharma');
       expect(parsed.createRows[1].rollNo).toBe(2);
       expect(parsed.createRows[2].rollNo).toBe(3);
+    });
+
+    it('parses the generated students_sample_roster.csv with all 20 students', () => {
+      const csvPath = path.resolve(__dirname, '../../../students_sample_roster.csv');
+      const csvContent = fs.readFileSync(csvPath, 'utf8');
+      const wb = XLSX.read(csvContent, { type: 'string' });
+
+      const parsed = parseStudentRoster(wb, new Set());
+      expect(parsed.createRows.length).toBe(20);
+      expect(parsed.rejectRows.length).toBe(0);
+      expect(parsed.createRows[0].rollNo).toBe(1);
+      expect(parsed.createRows[0].studentName).toBe('Aarav Sharma');
+      expect(parsed.createRows[19].rollNo).toBe(20);
+      expect(parsed.createRows[19].studentName).toBe('Sana Farooqui');
+    });
+
+    it('parses the generated students_sample_roster.xlsx with all 20 students', () => {
+      const xlsxPath = path.resolve(__dirname, '../../../students_sample_roster.xlsx');
+      const xlsxBuffer = fs.readFileSync(xlsxPath);
+      const wb = XLSX.read(xlsxBuffer, { type: 'buffer' });
+
+      const parsed = parseStudentRoster(wb, new Set());
+      expect(parsed.createRows.length).toBe(20);
+      expect(parsed.rejectRows.length).toBe(0);
+      expect(parsed.createRows[0].rollNo).toBe(1);
+      expect(parsed.createRows[19].rollNo).toBe(20);
     });
   });
 

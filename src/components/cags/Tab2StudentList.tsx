@@ -254,7 +254,7 @@ export default function Tab2StudentList() {
       const studentId = `${activeClass.id}_${formRollNo}`;
       const docRef = doc(db, 'students', studentId);
 
-      const data: Partial<Student> = {
+      const data: Partial<Student> & Record<string, any> = {
         id: studentId,
         classId: activeClass.id,
         academicYearId: activeSubject.academicYearId || activeClass.academicYearId,
@@ -265,6 +265,7 @@ export default function Tab2StudentList() {
         learnerCategory: formCategory,
         authorizedSubjectId: activeSubject.id,
         status: 'active',
+        updatedBy: user.uid,
         updatedAt: serverTimestamp(),
       };
 
@@ -286,10 +287,12 @@ export default function Tab2StudentList() {
 
   // 7. Toggle Learner Category Quick Action
   async function handleToggleCategory(student: Student, nextCategory: LearnerCategory) {
+    if (!user) return;
     try {
       await updateDoc(doc(db, 'students', student.id), {
         learnerCategory: nextCategory,
         authorizedSubjectId: activeSubject?.id,
+        updatedBy: user.uid,
         updatedAt: serverTimestamp(),
       });
       toast.success(`Roll ${student.rollNo} set to ${nextCategory.replace('_', ' ')}.`);
@@ -300,12 +303,14 @@ export default function Tab2StudentList() {
 
   // 8. Soft Archive Student
   async function handleArchiveStudent(student: Student) {
+    if (!user) return;
     if (!confirm(`Are you sure you want to archive student Roll ${student.rollNo} (${student.studentName})?`)) return;
 
     try {
       await updateDoc(doc(db, 'students', student.id), {
         status: 'archived',
         authorizedSubjectId: activeSubject?.id,
+        updatedBy: user.uid,
         updatedAt: serverTimestamp(),
       });
       toast.success(`Student Roll ${student.rollNo} archived.`);
@@ -525,9 +530,9 @@ export default function Tab2StudentList() {
                   <FileSpreadsheet className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Import Students from Excel</h3>
+                  <h3 className="text-base font-bold text-slate-900">Import Students (CSV / Excel)</h3>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    Upload .xlsx (e.g. cags-theory.xlsx sheet "List of Students")
+                    Upload .csv or .xlsx (e.g. students_sample_roster.csv)
                   </p>
                 </div>
               </div>
@@ -709,7 +714,7 @@ export default function Tab2StudentList() {
                     <span>Re-select File</span>
                     <input
                       type="file"
-                      accept=".xlsx, .xls"
+                      accept=".xlsx, .xls, .csv"
                       onChange={handleFileSelect}
                       className="hidden"
                     />

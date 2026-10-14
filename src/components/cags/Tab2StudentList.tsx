@@ -552,13 +552,13 @@ export default function Tab2StudentList() {
                   <Upload className="mx-auto h-8 w-8 text-slate-400 mb-3" />
                   <p className="text-sm font-bold text-slate-700">Choose student roster workbook</p>
                   <p className="text-xs text-slate-400 mt-1 mb-4">
-                    Supports .xlsx and .xls files. Automatically skips Row 10 #N/A formula artifacts.
+                    Supports .xlsx, .xls, and .csv files. Automatically discovers headers and skips formula artifacts.
                   </p>
                   <label className="btn-primary inline-flex cursor-pointer !text-xs !py-2 !px-4">
                     <span>Browse File</span>
                     <input
                       type="file"
-                      accept=".xlsx, .xls"
+                      accept=".xlsx, .xls, .csv"
                       onChange={handleFileSelect}
                       className="hidden"
                     />

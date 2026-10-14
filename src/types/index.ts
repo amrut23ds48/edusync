@@ -179,3 +179,105 @@ export interface StudentImportBatch {
 }
 
 
+// ---------------------------------------------------------------------------
+// Milestone 4: Sheets 3–6 (CO–PO Mapping, Mapping Calculation, COA-04, Action Plan)
+// ---------------------------------------------------------------------------
+export type CoCode = 'CO1' | 'CO2' | 'CO3' | 'CO4';
+export type MappingLevel = 1 | 2 | 3 | null;
+export type MappingStrength = 0 | 1 | 2 | 3;
+export type MappingCellStatus = 'unmapped' | 'suggested' | 'approved';
+
+export interface CagsMappingCell {
+  level: MappingLevel;
+  aiSuggestedLevel: MappingLevel;
+  rationale: string;
+  status: MappingCellStatus;
+}
+
+export interface CagsMappingRow {
+  coId: string;
+  syllabusHours: number;
+  percentageOfTotalHours: number;
+  mappings: Record<string, CagsMappingCell>;
+}
+
+export type CagsMatrix = Record<string, CagsMappingRow>;
+
+export interface CagsPoSummaryItem {
+  mappedCos: string[];
+  mappedHours: number;
+  totalHours: number;
+  percentageMapping: number;
+  calculatedStrength: MappingStrength;
+}
+
+export interface CagsMappingDocument {
+  subjectId: string;
+  academicYearId: string;
+  classId: string;
+  teacherUid: string;
+  totalSyllabusHours: number;
+  thresholds: { highMinPercent: number; moderateMinPercent: number; lowMinPercent: number };
+  matrix: CagsMatrix;
+  poSummary: Record<string, CagsPoSummaryItem>;
+  reviewMeetingLink: string;
+  reviewerNames: string[];
+  cdcApproved: boolean;
+  approvalStatus: 'draft' | 'approved';
+  lastAiGeneratedAt?: FirestoreDate;
+  approvedBy?: string;
+  approvedAt?: FirestoreDate;
+  updatedAt?: FirestoreDate;
+}
+
+export interface AttainmentGoal {
+  studentPercentThreshold: number;
+  marksPercentThreshold: number;
+}
+
+export interface AttainmentGoals {
+  level3: AttainmentGoal;
+  level2: AttainmentGoal;
+  level1: AttainmentGoal;
+  justification: string;
+}
+
+export interface HistoricalMarks {
+  academicYear: string;
+  ciaAvgPercent: number | null;
+  teeAvgPercent: number | null;
+}
+
+export interface CagsCoa04Document {
+  subjectId: string;
+  academicYearId: string;
+  classId: string;
+  teacherUid: string;
+  historicalMarks: HistoricalMarks[];
+  last3YearsAverage: { ciaPercent: number; teePercent: number };
+  calculationBaseJustification: string;
+  ciaAttainmentGoals: AttainmentGoals;
+  teeAttainmentGoals: AttainmentGoals;
+  cdcApprovalStatus: 'pending' | 'approved';
+  updatedAt?: FirestoreDate;
+  updatedBy?: string;
+}
+
+export interface CoActionPlanItem {
+  coId: string;
+  coDescription: string;
+  cayMinus1Plan: string;
+  cayPlan: string;
+  cayPlus1Plan: string;
+}
+
+export interface CagsActionPlanDocument {
+  subjectId: string;
+  academicYearId: string;
+  classId: string;
+  teacherUid: string;
+  plans: Record<string, CoActionPlanItem>;
+  cdcApprovalStatus: 'pending' | 'approved';
+  updatedAt?: FirestoreDate;
+  updatedBy?: string;
+}

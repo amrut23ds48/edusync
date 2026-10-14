@@ -17,6 +17,11 @@ import {
 import { useAcademic } from '../../context/AcademicContext';
 import ContextBreadcrumb from '../../components/layout/ContextBreadcrumb';
 import Tab2StudentList from '../../components/cags/Tab2StudentList';
+import Tab3CoPoMapping from '../../components/cags/Tab3CoPoMapping';
+import Tab4MappingCalc from '../../components/cags/Tab4MappingCalc';
+import Tab5Coa04Settings from '../../components/cags/Tab5Coa04Settings';
+import Tab6CoActionPlan from '../../components/cags/Tab6CoActionPlan';
+import { CagsWorkspaceProvider } from '../../context/CagsWorkspaceContext';
 
 export type CagsTab = 'dashboard' | 'students' | 'copo' | 'mapping-calc' | 'coa04' | 'action-plan';
 
@@ -86,10 +91,10 @@ export default function SubjectWorkspacePage() {
   const tabs: { id: CagsTab; label: string; icon: any; sheet: string; status: 'active' | 'upcoming' }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, sheet: 'Sheet 1', status: 'upcoming' },
     { id: 'students', label: 'List of Students', icon: Users, sheet: 'Sheet 2', status: 'active' },
-    { id: 'copo', label: 'CO-PO Mapping', icon: GitMerge, sheet: 'Sheet 3', status: 'upcoming' },
-    { id: 'mapping-calc', label: 'Mapping Calculation', icon: Calculator, sheet: 'Sheet 4', status: 'upcoming' },
-    { id: 'coa04', label: 'COA-04', icon: Sliders, sheet: 'Sheet 5', status: 'upcoming' },
-    { id: 'action-plan', label: 'COs Action Plan', icon: Target, sheet: 'Sheet 6', status: 'upcoming' },
+    { id: 'copo', label: 'CO-PO Mapping', icon: GitMerge, sheet: 'Sheet 3', status: 'active' },
+    { id: 'mapping-calc', label: 'Mapping Calculation', icon: Calculator, sheet: 'Sheet 4', status: 'active' },
+    { id: 'coa04', label: 'COA-04', icon: Sliders, sheet: 'Sheet 5', status: 'active' },
+    { id: 'action-plan', label: 'COs Action Plan', icon: Target, sheet: 'Sheet 6', status: 'active' },
   ];
 
   return (
@@ -177,6 +182,7 @@ export default function SubjectWorkspacePage() {
 
       {/* Tab Content Body */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-6 sm:p-8 animate-fade-up">
+      <CagsWorkspaceProvider subjectId={subjectId}>
         {/* Tab 2: List of Students (Milestone 3 active delivery) */}
         {activeTab === 'students' && <Tab2StudentList />}
 
@@ -206,77 +212,17 @@ export default function SubjectWorkspacePage() {
         )}
 
         {/* Tab 3: CO-PO Mapping (Milestone 4) */}
-        {activeTab === 'copo' && (
-          <div className="glass-card p-8 text-center max-w-2xl mx-auto">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-              <GitMerge className="h-7 w-7" />
-            </div>
-            <span className="badge bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs mb-2">
-              Sheet 3 · Milestone 4
-            </span>
-            <h3 className="text-lg font-bold text-slate-900">Course Outcome Articulation Matrix</h3>
-            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
-              Interactive 4x14 articulation grid mapping CO1–CO4 against PO1–PO12 & PSO1–PSO2. Includes 1-click AI auto-articulation powered by gpt-4o-mini with peer-review QR codes.
-            </p>
-            <div className="mt-6 flex justify-center">
-              <button
-                type="button"
-                onClick={() => setActiveTab('students')}
-                className="btn-secondary !text-xs"
-              >
-                Back to Student Roster
-              </button>
-            </div>
-          </div>
-        )}
+        {activeTab === 'copo' && <Tab3CoPoMapping />}
 
         {/* Tab 4: Mapping Calculation (Milestone 4) */}
-        {activeTab === 'mapping-calc' && (
-          <div className="glass-card p-8 text-center max-w-2xl mx-auto">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-600">
-              <Calculator className="h-7 w-7" />
-            </div>
-            <span className="badge bg-cyan-50 text-cyan-700 border border-cyan-200 text-xs mb-2">
-              Sheet 4 · Milestone 4
-            </span>
-            <h3 className="text-lg font-bold text-slate-900">Mapping Calculations & Session Percentages</h3>
-            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
-              Table A (CO hours and percentage of 39 hrs) and Table B (PO mapped COs, allocated hours, and derived mapping strength: 3 = High, 2 = Moderate, 1 = Low).
-            </p>
-          </div>
-        )}
+        {activeTab === 'mapping-calc' && <Tab4MappingCalc />}
 
         {/* Tab 5: COA-04 (Milestone 4) */}
-        {activeTab === 'coa04' && (
-          <div className="glass-card p-8 text-center max-w-2xl mx-auto">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
-              <Sliders className="h-7 w-7" />
-            </div>
-            <span className="badge bg-violet-50 text-violet-700 border border-violet-200 text-xs mb-2">
-              Sheet 5 · Milestone 4
-            </span>
-            <h3 className="text-lg font-bold text-slate-900">COA-04 Attainment Thresholds & Justifications</h3>
-            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
-              3-year CIA and TEE attainment benchmarks, justification inputs, and Level 1 (50-59%), Level 2 (60-69%), and Level 3 (70%+) attainment targets.
-            </p>
-          </div>
-        )}
+        {activeTab === 'coa04' && <Tab5Coa04Settings />}
 
         {/* Tab 6: COs Action Plan (Milestone 4) */}
-        {activeTab === 'action-plan' && (
-          <div className="glass-card p-8 text-center max-w-2xl mx-auto">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
-              <Target className="h-7 w-7" />
-            </div>
-            <span className="badge bg-amber-50 text-amber-700 border border-amber-200 text-xs mb-2">
-              Sheet 6 · Milestone 4
-            </span>
-            <h3 className="text-lg font-bold text-slate-900">Continuous Improvement & Action Plan</h3>
-            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
-              Multi-cycle continuous improvement plan covering CAY-1, CAY, and CAY+1 action items with AI drafting assistant.
-            </p>
-          </div>
-        )}
+        {activeTab === 'action-plan' && <Tab6CoActionPlan />}
+      </CagsWorkspaceProvider>
       </main>
     </div>
   );

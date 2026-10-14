@@ -25,7 +25,8 @@ import {
   CheckCircle2,
   Check,
   Target,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -368,6 +369,45 @@ export default function AcademicSetupPage() {
         syllabusHours: 10,
       },
     ]);
+  }
+
+  function handleAddCo() {
+    if (coList.length >= 4) {
+      toast.error('Prototype allows up to 4 Course Outcomes (CO1 to CO4).');
+      return;
+    }
+    const nextNum = (coList.length + 1) as 1 | 2 | 3 | 4;
+    const remainingHours = targetSubjectForCo
+      ? Math.max(0, targetSubjectForCo.totalSyllabusHours - coList.reduce((acc, c) => acc + (Number(c.syllabusHours) || 0), 0))
+      : 8;
+
+    setCoList((prev) => [
+      ...prev,
+      {
+        coNumber: nextNum,
+        coCode: `CO${nextNum}` as 'CO1' | 'CO2' | 'CO3' | 'CO4',
+        description: '',
+        syllabusHours: remainingHours > 0 ? remainingHours : 6,
+      },
+    ]);
+  }
+
+  function handleRemoveCo(idx: number) {
+    if (coList.length <= 1) {
+      toast.error('At least one Course Outcome is required.');
+      return;
+    }
+    const updated = coList
+      .filter((_, i) => i !== idx)
+      .map((c, i) => {
+        const num = (i + 1) as 1 | 2 | 3 | 4;
+        return {
+          ...c,
+          coNumber: num,
+          coCode: `CO${num}` as 'CO1' | 'CO2' | 'CO3' | 'CO4',
+        };
+      });
+    setCoList(updated);
   }
 
   async function handleSaveCourseOutcomes(e: FormEvent) {
@@ -995,17 +1035,17 @@ export default function AcademicSetupPage() {
 
       {/* Modal 4: Course Outcomes (CO1–CO4) Modal */}
       {showCoModal && targetSubjectForCo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="glass-card max-w-2xl w-full p-6 bg-white relative my-8 shadow-2xl">
-            {/* Modal Header */}
-            <div className="flex justify-between items-start pb-4 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6">
+          <div className="glass-card max-w-2xl w-full max-h-[88vh] flex flex-col bg-white relative rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            {/* 1. Fixed Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between shrink-0 bg-white">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700 border border-brand-100">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700 border border-brand-100 shrink-0">
                   <Target className="h-5 w-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-slate-900">Course Outcomes (CO1–CO4)</h2>
+                    <h2 className="text-base font-bold text-slate-900">Course Outcomes Setup</h2>
                     <span className="badge bg-brand-50 text-brand-700 border border-brand-200 font-mono font-bold">
                       {targetSubjectForCo.courseCode}
                     </span>
@@ -1018,133 +1058,173 @@ export default function AcademicSetupPage() {
               <button
                 type="button"
                 onClick={() => setShowCoModal(false)}
-                className="text-slate-400 hover:text-slate-600 transition"
+                className="text-slate-400 hover:text-slate-600 transition p-1"
+                title="Close"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Quick Actions & Hours Bar */}
-            <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600">Hours Tally:</span>
-                {(() => {
-                  const total = coList.reduce((acc, c) => acc + Number(c.syllabusHours || 0), 0);
-                  const target = targetSubjectForCo.totalSyllabusHours;
-                  const matches = total === target;
-                  return (
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
-                        matches
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}
-                    >
-                      {matches ? <Check className="h-3.5 w-3.5" /> : null}
-                      {total} / {target} hrs
-                      {matches ? ' (Balanced)' : ` (${Math.abs(target - total)}h diff)`}
-                    </span>
-                  );
-                })()}
+            {/* 2. Scrollable Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+              {/* Quick Actions & Hours Bar */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-600">Hours Tally:</span>
+                  {(() => {
+                    const total = coList.reduce((acc, c) => acc + Number(c.syllabusHours || 0), 0);
+                    const target = targetSubjectForCo.totalSyllabusHours;
+                    const matches = total === target;
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
+                          matches
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}
+                      >
+                        {matches ? <Check className="h-3.5 w-3.5" /> : null}
+                        {total} / {target} hrs
+                        {matches ? ' (Balanced)' : ` (${Math.abs(target - total)}h difference)`}
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                {targetSubjectForCo.courseCode.toUpperCase() === 'CSDO7023' && (
+                  <button
+                    type="button"
+                    onClick={loadCsdo7023Template}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 bg-white px-2.5 py-1 rounded-lg border border-brand-200 shadow-2xs hover:bg-brand-50 transition"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-brand-600" />
+                    Load Official CSDO7023 COs
+                  </button>
+                )}
               </div>
 
-              {targetSubjectForCo.courseCode.toUpperCase() === 'CSDO7023' && (
-                <button
-                  type="button"
-                  onClick={loadCsdo7023Template}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 bg-white px-2.5 py-1 rounded-lg border border-brand-200 shadow-2xs hover:bg-brand-50 transition"
-                >
-                  <Sparkles className="h-3.5 w-3.5 text-brand-600" />
-                  Load Official CSDO7023 COs
-                </button>
+              {/* Loading Indicator */}
+              {loadingCos ? (
+                <div className="py-12 text-center">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600 mb-2" />
+                  <p className="text-xs font-medium text-slate-500">Loading Course Outcomes...</p>
+                </div>
+              ) : (
+                <form id="co-form" onSubmit={handleSaveCourseOutcomes} className="space-y-3.5">
+                  {coList.map((co, idx) => (
+                    <div
+                      key={co.coCode}
+                      className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-6 w-12 items-center justify-center rounded-md bg-brand-600 text-white font-mono font-bold text-xs shadow-2xs">
+                            {co.coCode}
+                          </span>
+                          <span className="text-xs font-bold text-slate-700">Course Outcome {co.coNumber}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                              Hours:
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="40"
+                              required
+                              value={co.syllabusHours}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setCoList((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, syllabusHours: val } : item))
+                                );
+                              }}
+                              className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-mono font-bold text-slate-800 text-center focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                            />
+                            <span className="text-xs text-slate-400 font-mono">hrs</span>
+                          </div>
+
+                          {coList.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCo(idx)}
+                              className="text-slate-300 hover:text-red-600 transition p-1"
+                              title={`Remove ${co.coCode}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <textarea
+                        required
+                        rows={2}
+                        placeholder={`Enter formal syllabus statement for ${co.coCode}...`}
+                        value={co.description}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCoList((prev) =>
+                            prev.map((item, i) => (i === idx ? { ...item, description: val } : item))
+                          );
+                        }}
+                        className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
+                      />
+                    </div>
+                  ))}
+
+                  {/* Add Course Outcome Button */}
+                  {coList.length < 4 ? (
+                    <button
+                      type="button"
+                      onClick={handleAddCo}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-200 hover:border-brand-500 bg-brand-50/30 hover:bg-brand-50/70 py-3 text-xs font-bold text-brand-700 transition"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Course Outcome (CO{coList.length + 1})
+                    </button>
+                  ) : (
+                    <div className="p-2.5 rounded-lg bg-slate-50 text-center text-xs text-slate-500 border border-slate-200">
+                      Maximum 4 Course Outcomes (CO1 to CO4) configured for prototype scope.
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-slate-400 italic">
+                    Note: Course Outcomes configured here will be automatically linked to any teacher assigned to this subject.
+                  </p>
+                </form>
               )}
             </div>
 
-            {/* Loading Indicator */}
-            {loadingCos ? (
-              <div className="py-12 text-center">
-                <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600 mb-2" />
-                <p className="text-xs font-medium text-slate-500">Loading Course Outcomes...</p>
+            {/* 3. Fixed Modal Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+              <span className="text-xs text-slate-500 font-medium">
+                {coList.length} outcome{coList.length !== 1 ? 's' : ''} defined
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCoModal(false)}
+                  className="btn-secondary !py-2 !px-3.5 !text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="co-form"
+                  disabled={savingCos}
+                  className="btn-primary !py-2 !px-4 !text-xs"
+                >
+                  {savingCos ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  Save Course Outcomes
+                </button>
               </div>
-            ) : (
-              <form onSubmit={handleSaveCourseOutcomes} className="mt-4 space-y-3.5">
-                {coList.map((co, idx) => (
-                  <div
-                    key={co.coCode}
-                    className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-6 w-12 items-center justify-center rounded-md bg-brand-600 text-white font-mono font-bold text-xs shadow-2xs">
-                          {co.coCode}
-                        </span>
-                        <span className="text-xs font-bold text-slate-700">Course Outcome {co.coNumber}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                          Syllabus Hours:
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="40"
-                          required
-                          value={co.syllabusHours}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setCoList((prev) =>
-                              prev.map((item, i) => (i === idx ? { ...item, syllabusHours: val } : item))
-                            );
-                          }}
-                          className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-mono font-bold text-slate-800 text-center focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <span className="text-xs text-slate-400 font-mono">hrs</span>
-                      </div>
-                    </div>
-
-                    <textarea
-                      required
-                      rows={2}
-                      placeholder={`Enter formal syllabus statement for ${co.coCode}...`}
-                      value={co.description}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setCoList((prev) =>
-                          prev.map((item, i) => (i === idx ? { ...item, description: val } : item))
-                        );
-                      }}
-                      className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
-                    />
-                  </div>
-                ))}
-
-                <p className="text-[11px] text-slate-400 italic">
-                  Note: Course Outcomes configured here will be automatically inherited by any teacher assigned to this subject. Prototype scopes CO1 through CO4 with total syllabus hours.
-                </p>
-
-                <div className="pt-3 flex justify-end gap-2 border-t mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowCoModal(false)}
-                    className="btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingCos}
-                    className="btn-primary"
-                  >
-                    {savingCos ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-4 w-4" />
-                    )}
-                    Save Course Outcomes
-                  </button>
-                </div>
-              </form>
-            )}
+            </div>
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
+import { AcademicProvider } from './context/AcademicContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import AppShell from './components/layout/AppShell';
 import LoginPage from './pages/auth/LoginPage';
@@ -11,14 +12,16 @@ import TeachersManagementPage from './pages/admin/TeachersManagementPage';
 import GlobalOutcomesPage from './pages/admin/GlobalOutcomesPage';
 import TimetableManagerPage from './pages/admin/TimetableManagerPage';
 import TeacherHomeSelector from './pages/teacher/TeacherHomeSelector';
+import SubjectWorkspacePage from './pages/teacher/SubjectWorkspacePage';
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Toaster position="top-right" toastOptions={{ className: 'text-sm' }} />
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
+        <AcademicProvider>
+          <Toaster position="top-right" toastOptions={{ className: 'text-sm' }} />
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
 
           {/* Super Admin Routes wrapped in AppShell */}
           <Route
@@ -39,17 +42,30 @@ export default function App() {
 
           {/* Teacher Routes */}
           <Route
-            path="/teacher/*"
+            path="/teacher"
             element={
-              <ProtectedRoute allowedRoles={['teacher']}>
+              <ProtectedRoute allowedRoles={['teacher', 'super_admin']}>
                 <TeacherHomeSelector />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/teacher/subject/:subjectId/cags"
+            element={
+              <ProtectedRoute allowedRoles={['teacher', 'super_admin']}>
+                <SubjectWorkspacePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/subject/:subjectId"
+            element={<Navigate to="cags" replace />}
           />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        </AcademicProvider>
       </AuthProvider>
     </BrowserRouter>
   );

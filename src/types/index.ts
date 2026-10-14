@@ -145,3 +145,37 @@ export interface CourseOutcome {
   createdBy?: string;
 }
 
+export type LearnerCategory = 'slow_learner' | 'advanced_learner' | 'unclassified';
+
+export interface Student {
+  id: string; // ${classId}_${rollNo}
+  classId: string;
+  academicYearId: string;
+  rollNo: number;
+  studentName: string;
+  email?: string;
+  contactNo?: string;
+  learnerCategory: LearnerCategory;
+  status: 'active' | 'archived';
+  authorizedSubjectId?: string; // used for security rule validation on writes
+  createdAt?: FirestoreDate;
+  updatedAt?: FirestoreDate;
+  createdBy?: string;
+}
+
+export interface StudentImportBatch {
+  id: string; // `batch_${classId}_${timestamp}`
+  classId: string;
+  subjectId: string;
+  academicYearId: string;
+  fileName: string;
+  uploadedBy: string;
+  totalRowsFound: number;
+  createdCount: number;
+  updatedCount: number;
+  rejectedCount: number;
+  rejectionReasons: Array<{ rowNumber: number; reason: string }>;
+  uploadedAt: FirestoreDate;
+}
+
+

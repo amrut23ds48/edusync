@@ -173,7 +173,7 @@ export default function TeacherHomeSelector() {
               <GraduationCap className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-slate-900 leading-tight">CAGS Portal</h1>
+              <h1 className="text-base font-bold text-slate-900 leading-tight">EduSync Portal</h1>
               <p className="text-[11px] font-medium text-slate-400">Teacher Workspace · Course Articulation</p>
             </div>
           </div>
@@ -660,7 +660,7 @@ export default function TeacherHomeSelector() {
                 }}
                 className="btn-primary !text-xs !py-2 !px-4"
               >
-                <span>Open CAGS Workspace</span>
+                <span>Open Course Workspace</span>
                 <ArrowRight className="h-3.5 w-3.5" />
               </button>
               <button

@@ -192,7 +192,7 @@ export default function GlobalOutcomesPage() {
       await batch.commit();
       toast.success(`Seeded 19 official outcomes for ${selectedDept?.code}.`);
     } catch (err: any) {
-      console.error('[CAGS] Seeding error:', err);
+      console.error('[EduSync] Seeding error:', err);
       toast.error('Failed to seed outcomes.');
     } finally {
       setSeeding(false);

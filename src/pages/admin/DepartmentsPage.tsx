@@ -54,7 +54,7 @@ export default function DepartmentsPage() {
         setLoading(false);
       },
       (error) => {
-        console.error('[CAGS] Error fetching departments:', error);
+        console.error('[EduSync] Error fetching departments:', error);
         toast.error('Failed to load departments.');
         setLoading(false);
       }
@@ -124,7 +124,7 @@ export default function DepartmentsPage() {
       }
       closeModal();
     } catch (err: any) {
-      console.error('[CAGS] Error saving department:', err);
+      console.error('[EduSync] Error saving department:', err);
       toast.error(err?.message || 'Failed to save department.');
     } finally {
       setSubmitting(false);
@@ -144,7 +144,7 @@ export default function DepartmentsPage() {
           : `Archived department: ${dept.code}`
       );
     } catch (err: any) {
-      console.error('[CAGS] Error updating department status:', err);
+      console.error('[EduSync] Error updating department status:', err);
       toast.error('Failed to change department status.');
     }
   }

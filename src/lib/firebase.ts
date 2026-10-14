@@ -18,7 +18,7 @@ export const isFirebaseConfigured = Boolean(
 
 if (!isFirebaseConfigured) {
   console.warn(
-    '[CAGS] Missing VITE_FIREBASE_* variables. Copy .env.example to .env.local and fill in your Firebase web app config.',
+    '[EduSync] Missing VITE_FIREBASE_* variables. Copy .env.example to .env.local and fill in your Firebase web app config.',
   );
 }
 

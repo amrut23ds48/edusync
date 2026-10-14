@@ -95,7 +95,7 @@ export function CagsWorkspaceProvider({
         setCosLoading(false);
       },
       (err) => {
-        console.error('[CAGS] course_outcomes listener failed:', err);
+        console.error('[EduSync] course_outcomes listener failed:', err);
         setCosLoading(false);
       }
     );
@@ -110,7 +110,7 @@ export function CagsWorkspaceProvider({
         snap.forEach((d) => list.push({ ...(d.data() as GlobalOutcome), id: d.id }));
         setAllOutcomes(list);
       },
-      (err) => console.error('[CAGS] global_outcomes listener failed:', err)
+      (err) => console.error('[EduSync] global_outcomes listener failed:', err)
     );
   }, []);
 
@@ -124,7 +124,7 @@ export function CagsWorkspaceProvider({
         setMappingLoading(false);
       },
       (err) => {
-        console.error('[CAGS] cags_mappings listener failed:', err);
+        console.error('[EduSync] cags_mappings listener failed:', err);
         setMappingLoading(false);
       }
     );

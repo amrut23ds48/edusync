@@ -62,7 +62,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       },
       (err) => {
-        console.error('[CAGS] Error listening to teacher assignments:', err);
+        console.error('[EduSync] Error listening to teacher assignments:', err);
         setError('Failed to load assignments.');
         setLoading(false);
       }

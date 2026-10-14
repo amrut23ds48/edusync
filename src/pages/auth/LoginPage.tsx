@@ -120,7 +120,7 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 shadow-glow">
             <GraduationCap className="h-8 w-8" />
           </div>
-          <h1 className="text-3xl font-bold">CAGS Automation</h1>
+          <h1 className="text-3xl font-bold">EduSync</h1>
           <p className="mt-2 text-sm text-slate-300">Academic records &amp; attendance portal for engineering departments</p>
         </div>
 

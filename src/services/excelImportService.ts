@@ -300,7 +300,7 @@ export async function commitStudentImportBatch({
     finalBatch.set(batchRef, batchMeta);
     await finalBatch.commit();
   } catch (batchErr) {
-    console.warn('[CAGS] Notice: student_import_batches audit write notice:', batchErr);
+    console.warn('[EduSync] Notice: student_import_batches audit write notice:', batchErr);
   }
 
   return {

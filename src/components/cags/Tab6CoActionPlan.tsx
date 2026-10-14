@@ -39,7 +39,7 @@ export default function Tab6CoActionPlan() {
         setLoaded(true);
       },
       (err) => {
-        console.error('[CAGS] cags_action_plans listener failed:', err);
+        console.error('[EduSync] cags_action_plans listener failed:', err);
         setLoaded(true);
       }
     );

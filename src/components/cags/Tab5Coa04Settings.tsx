@@ -60,7 +60,7 @@ export default function Tab5Coa04Settings() {
         setLoaded(true);
       },
       (err) => {
-        console.error('[CAGS] cags_coa04 listener failed:', err);
+        console.error('[EduSync] cags_coa04 listener failed:', err);
         setLoaded(true);
       }
     );

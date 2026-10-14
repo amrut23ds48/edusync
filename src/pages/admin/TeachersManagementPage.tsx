@@ -173,7 +173,7 @@ export default function TeachersManagementPage() {
       setTeacherPassword('');
       setTeacherName('');
     } catch (err: any) {
-      console.error('[CAGS] Error provisioning teacher:', err);
+      console.error('[EduSync] Error provisioning teacher:', err);
       toast.error(err?.message || 'Failed to provision teacher account.');
     } finally {
       setSubmitting(false);
@@ -242,7 +242,7 @@ export default function TeachersManagementPage() {
       toast.success(`Assigned ${subject?.courseCode} to ${selectedTeacher.displayName}`);
       setShowAssignModal(false);
     } catch (err: any) {
-      console.error('[CAGS] Assignment error:', err);
+      console.error('[EduSync] Assignment error:', err);
       toast.error(err?.message || 'Failed to assign subject.');
     } finally {
       setAssigning(false);

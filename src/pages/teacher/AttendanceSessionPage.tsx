@@ -362,7 +362,7 @@ export default function AttendanceSessionPage() {
                 className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Return to CAGS Workspace</span>
+                <span>Return to EduSync Workspace</span>
               </Link>
             </div>
             <div className="flex items-center gap-3">

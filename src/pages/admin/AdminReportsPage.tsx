@@ -152,7 +152,7 @@ export default function AdminReportsPage() {
       const ws = XLSX.utils.json_to_sheet(exportData);
       XLSX.utils.book_append_sheet(wb, ws, 'Departmental Summary');
 
-      const fileName = `Departmental_CAGS_Report_${selectedMonth}.xlsx`;
+      const fileName = `Departmental_EduSync_Report_${selectedMonth}.xlsx`;
       XLSX.writeFile(wb, fileName);
       toast.success(`Exported ${fileName} successfully!`);
     } catch (err: any) {

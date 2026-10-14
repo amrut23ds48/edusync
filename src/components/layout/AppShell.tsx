@@ -38,7 +38,7 @@ export default function AppShell() {
                 <GraduationCap className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-base font-bold text-slate-900 leading-tight">CAGS Portal</h1>
+                <h1 className="text-base font-bold text-slate-900 leading-tight">EduSync Portal</h1>
                 <p className="text-[11px] font-medium text-slate-400">Administration Console</p>
               </div>
             </div>

@@ -195,7 +195,7 @@ export default function TimetableManagerPage() {
       toast.success(`Scheduled ${subject?.courseCode} on ${dayObj?.name} at ${formStartTime}`);
       setShowModal(false);
     } catch (err: any) {
-      console.error('[CAGS] Timetable error:', err);
+      console.error('[EduSync] Timetable error:', err);
       toast.error(err?.message || 'Failed to save timetable slot.');
     } finally {
       setSubmitting(false);

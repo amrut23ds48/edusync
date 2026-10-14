@@ -91,7 +91,7 @@ export default function Tab2StudentList() {
         setLoading(false);
       },
       (err) => {
-        console.error('[CAGS] Error listening to students:', err);
+        console.error('[EduSync] Error listening to students:', err);
         toast.error('Failed to load students roster.');
         setLoading(false);
       }
@@ -147,7 +147,7 @@ export default function Tab2StudentList() {
         `Parsed ${parsed.totalScannedRows} rows: ${parsed.createRows.length} new, ${parsed.updateRows.length} updates.`
       );
     } catch (err: any) {
-      console.error('[CAGS] Excel parse error:', err);
+      console.error('[EduSync] Excel parse error:', err);
       toast.error(err?.message || 'Failed to parse Excel file.');
     } finally {
       setParsing(false);
@@ -178,7 +178,7 @@ export default function Tab2StudentList() {
       setImportFile(null);
       setParseResult(null);
     } catch (err: any) {
-      console.error('[CAGS] Batch commit error:', err);
+      console.error('[EduSync] Batch commit error:', err);
       toast.error(err?.message || 'Failed to commit student batch.');
     } finally {
       setImporting(false);
@@ -278,7 +278,7 @@ export default function Tab2StudentList() {
       toast.success(editingStudent ? 'Student details updated.' : `Student Roll ${formRollNo} added.`);
       setShowAddModal(false);
     } catch (err: any) {
-      console.error('[CAGS] Student save error:', err);
+      console.error('[EduSync] Student save error:', err);
       toast.error(err?.message || 'Failed to save student.');
     } finally {
       setSubmittingManual(false);

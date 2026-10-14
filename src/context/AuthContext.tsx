@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
         },
         (error) => {
-          console.error('[CAGS] Failed to read user profile', error);
+          console.error('[EduSync] Failed to read user profile', error);
           setNotice('unprovisioned');
           setUserProfile(null);
           setLoading(false);

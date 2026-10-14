@@ -242,7 +242,7 @@ export async function requestAiCoPoMapping(
   );
   const parsed = AiCoPoMappingResponseSchema.safeParse(raw);
   if (!parsed.success) {
-    console.warn('[CAGS AI] Mapping response failed validation:', parsed.error.issues.slice(0, 5));
+    console.warn('[EduSync AI] Mapping response failed validation:', parsed.error.issues.slice(0, 5));
     throw new AiUnavailableError('AI returned an invalid response format');
   }
   return parsed.data;
@@ -285,10 +285,10 @@ export async function requestAiTeachingPlanIct(
       return parsed.data;
     }
   } catch (err) {
-    console.warn('[CAGS AI] ICT generation fallback engaged:', err);
+    console.warn('[EduSync AI] ICT generation fallback engaged:', err);
   }
 
-  // Fallback defaults aligned with CAGS institutional conventions
+  // Fallback defaults aligned with EduSync institutional conventions
   let recommendedIct = 'Chalk Board, Presentation';
   if (lectureMode === 'online') {
     recommendedIct = 'Online Tool';
@@ -360,7 +360,7 @@ Draft exactly 4 Course Outcomes (CO1 to CO4) ensuring the sum of syllabusHours e
       return parsed.data;
     }
   } catch (err) {
-    console.warn('[CAGS AI] Draft COs generation fallback engaged:', err);
+    console.warn('[EduSync AI] Draft COs generation fallback engaged:', err);
   }
 
   // Deterministic Fallback based on Bloom's taxonomy & module distribution
@@ -476,7 +476,7 @@ Generate exactly ${totalHours} sequential lecture entries (sequenceNo 1 to ${tot
       return { lectures };
     }
   } catch (err) {
-    console.warn('[CAGS AI] Full syllabus plan AI generation fallback engaged:', err);
+    console.warn('[EduSync AI] Full syllabus plan AI generation fallback engaged:', err);
   }
 
   // Deterministic Fallback: Distribute module topics across exact hour counts

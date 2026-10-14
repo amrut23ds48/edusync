@@ -34,7 +34,7 @@ export default function AdminOverviewPage() {
       );
       setOutcomeCount(outcomeSnap.data().count);
     } catch (err) {
-      console.warn('[CAGS] Could not count outcomes', err);
+      console.warn('[EduSync] Could not count outcomes', err);
     }
 
     try {
@@ -68,7 +68,7 @@ export default function AdminOverviewPage() {
       await loadStats();
       toast.success(`Seeded ${EXPECTED} official outcomes.`);
     } catch (err: any) {
-      console.error('[CAGS] Seeding failed:', err);
+      console.error('[EduSync] Seeding failed:', err);
       toast.error('Seeding failed. Check permissions.');
     } finally {
       setSeeding(false);

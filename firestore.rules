@@ -1,0 +1,307 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // 1. HELPER FUNCTIONS
+    // =========================================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDocPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function getUserData() {
+      return get(userDocPath(request.auth.uid)).data;
+    }
+
+    function isActiveUser() {
+      return isSignedIn()
+        && exists(userDocPath(request.auth.uid))
+        && getUserData().status == 'active';
+    }
+
+    function isSuperAdmin() {
+      return isActiveUser() && getUserData().role == 'super_admin';
+    }
+
+    function isTeacher() {
+      return isActiveUser() && getUserData().role == 'teacher';
+    }
+
+    // O(1) check: verifies that the signed-in teacher has an active assignment for subjectId
+    function isAssignedToSubject(subjectId) {
+      let assignmentPath = /databases/$(database)/documents/teacher_assignments/$(request.auth.uid + '_' + subjectId);
+      return isTeacher()
+        && subjectId is string
+        && exists(assignmentPath)
+        && get(assignmentPath).data.status == 'active';
+    }
+
+    // O(1) check: verifies that the signed-in teacher is assigned to subjectId
+    // AND that assignment matches classId and academicYearId
+    function isAssignedToClassViaSubject(subjectId, classId, academicYearId) {
+      let assignmentPath = /databases/$(database)/documents/teacher_assignments/$(request.auth.uid + '_' + subjectId);
+      return isTeacher()
+        && subjectId is string
+        && exists(assignmentPath)
+        && get(assignmentPath).data.status == 'active'
+        && get(assignmentPath).data.classId == classId
+        && get(assignmentPath).data.academicYearId == academicYearId;
+    }
+
+    // Ensures immutable ownership/scope fields cannot be altered during an update
+    function scopeUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // =========================================================================
+    // 2. USERS COLLECTION
+    // =========================================================================
+    match /users/{userId} {
+      // Users can read their own profile; Super Admin can read all profiles
+      allow read: if (isSignedIn() && request.auth.uid == userId) || isSuperAdmin();
+
+      // Super Admin can create teacher profiles from the dashboard.
+      // (First Super Admin doc is seeded once via Firebase Console or seed script).
+      allow create: if isSuperAdmin()
+        && request.resource.data.role in ['teacher', 'super_admin']
+        && request.resource.data.status in ['active', 'disabled'];
+
+      // Super Admin can update any user profile (e.g., disable/enable teacher).
+      // Teachers can only update their own displayName and updatedAt.
+      allow update: if isSuperAdmin() || (
+        isTeacher()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+      );
+
+      // Use soft-deletion (status: 'disabled') instead of deleting user documents
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 3. ACADEMIC HIERARCHY & GLOBAL OUTCOMES
+    // =========================================================================
+    match /academic_years/{yearId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /classes/{classId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /subjects/{subjectId} {
+      allow read: if isSuperAdmin() || isAssignedToSubject(subjectId);
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (
+        // Assigned teacher may update session rollup counters when recording attendance
+        isAssignedToSubject(subjectId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['conductedSessionsCount', 'updatedAt'])
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /teacher_assignments/{assignmentId} {
+      allow read: if isSuperAdmin() || (isTeacher() && resource.data.teacherUid == request.auth.uid);
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /global_outcomes/{outcomeId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 4. SHEET 2: STUDENTS & EXCEL IMPORT BATCHES
+    // =========================================================================
+    // Student and batch writes include `authorizedSubjectId` so rules can verify
+    // the teacher's assignment to that class in a single lookup.
+    match /student_import_batches/{batchId} {
+      allow read: if isSuperAdmin() || isTeacher();
+      allow create: if isSuperAdmin() || (
+        isAssignedToClassViaSubject(
+          request.resource.data.authorizedSubjectId,
+          request.resource.data.classId,
+          request.resource.data.academicYearId
+        )
+        && request.resource.data.importedBy == request.auth.uid
+      );
+      allow update, delete: if isSuperAdmin() || (
+        isAssignedToClassViaSubject(
+          resource.data.authorizedSubjectId,
+          resource.data.classId,
+          resource.data.academicYearId
+        )
+      );
+    }
+
+    match /students/{studentId} {
+      allow read: if isSuperAdmin() || isTeacher();
+
+      allow create: if isSuperAdmin() || (
+        isAssignedToClassViaSubject(
+          request.resource.data.authorizedSubjectId,
+          request.resource.data.classId,
+          request.resource.data.academicYearId
+        )
+        && studentId == (request.resource.data.classId + '_' + request.resource.data.rollNo)
+        && request.resource.data.updatedBy == request.auth.uid
+      );
+
+      allow update: if isSuperAdmin() || (
+        isAssignedToClassViaSubject(
+          request.resource.data.authorizedSubjectId,
+          request.resource.data.classId,
+          request.resource.data.academicYearId
+        )
+        && scopeUnchanged(['academicYearId', 'classId', 'rollNo'])
+        && request.resource.data.updatedBy == request.auth.uid
+      );
+
+      allow delete: if isSuperAdmin() || (
+        isAssignedToClassViaSubject(
+          resource.data.authorizedSubjectId,
+          resource.data.classId,
+          resource.data.academicYearId
+        )
+      );
+    }
+
+    // =========================================================================
+    // 5. SHEETS 3, 4, 5, 6: COURSE OUTCOMES & CAGS RECORDS (UP TO CO-4)
+    // =========================================================================
+    match /course_outcomes/{coDocId} {
+      allow read: if isActiveUser();
+
+      allow create: if isSuperAdmin() || (
+        isAssignedToSubject(request.resource.data.subjectId)
+        && request.resource.data.coNumber in [1, 2, 3, 4]
+        && coDocId == (request.resource.data.subjectId + '_CO' + string(request.resource.data.coNumber))
+        && request.resource.data.syllabusHours is number
+        && request.resource.data.syllabusHours > 0
+      );
+
+      allow update: if isSuperAdmin() || (
+        isAssignedToSubject(resource.data.subjectId)
+        && scopeUnchanged(['subjectId', 'classId', 'academicYearId', 'coNumber', 'coCode'])
+        && request.resource.data.coNumber in [1, 2, 3, 4]
+      );
+
+      allow delete: if isSuperAdmin() || isAssignedToSubject(resource.data.subjectId);
+    }
+
+    match /cags_mappings/{subjectId} {
+      allow read: if isSuperAdmin() || isAssignedToSubject(subjectId);
+      allow create, update: if isSuperAdmin() || (
+        isAssignedToSubject(subjectId)
+        && request.resource.data.subjectId == subjectId
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /cags_coa04/{subjectId} {
+      allow read: if isSuperAdmin() || isAssignedToSubject(subjectId);
+      allow create, update: if isSuperAdmin() || (
+        isAssignedToSubject(subjectId)
+        && request.resource.data.subjectId == subjectId
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /cags_action_plans/{subjectId} {
+      allow read: if isSuperAdmin() || isAssignedToSubject(subjectId);
+      allow create, update: if isSuperAdmin() || (
+        isAssignedToSubject(subjectId)
+        && request.resource.data.subjectId == subjectId
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 6. TIMETABLE, TEACHING PLAN & PER-LECTURE ATTENDANCE
+    // =========================================================================
+    match /timetables/{slotId} {
+      allow read: if isSuperAdmin() || (isTeacher() && isAssignedToSubject(resource.data.subjectId));
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /teaching_plan_entries/{entryId} {
+      allow read: if isSuperAdmin() || isAssignedToSubject(resource.data.subjectId);
+
+      allow create: if isSuperAdmin() || (
+        isAssignedToSubject(request.resource.data.subjectId)
+        && request.resource.data.mappedCoCode in ['-', 'CO1', 'CO2', 'CO3', 'CO4']
+      );
+
+      allow update: if isSuperAdmin() || (
+        isAssignedToSubject(resource.data.subjectId)
+        && scopeUnchanged(['subjectId', 'classId', 'academicYearId'])
+      );
+
+      allow delete: if isSuperAdmin() || isAssignedToSubject(resource.data.subjectId);
+    }
+
+    match /attendance_sessions/{sessionId} {
+      allow read: if isSuperAdmin() || isAssignedToSubject(resource.data.subjectId);
+
+      allow create: if isSuperAdmin() || (
+        isAssignedToSubject(request.resource.data.subjectId)
+        // Enforce deterministic composite ID to prevent duplicate lectures for the same slot
+        && sessionId == (
+          request.resource.data.subjectId + '_' +
+          request.resource.data.lectureDate + '_' +
+          request.resource.data.startTime
+        )
+        && request.resource.data.lectureMode in ['scheduled', 'extra', 'online', 'cancelled']
+      );
+
+      allow update: if isSuperAdmin() || (
+        isAssignedToSubject(resource.data.subjectId)
+        && scopeUnchanged(['subjectId', 'classId', 'academicYearId', 'lectureDate', 'startTime'])
+      );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 7. DASHBOARD STATS, MONTHLY REPORTS & AUDIT LOGS
+    // =========================================================================
+    match /monthly_reports/{reportId} {
+      allow read: if isSuperAdmin() || isAssignedToSubject(resource.data.subjectId);
+
+      allow create, update: if isSuperAdmin() || (
+        isAssignedToSubject(request.resource.data.subjectId)
+        && reportId == (request.resource.data.subjectId + '_' + request.resource.data.monthKey)
+      );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    match /subject_dashboard_stats/{subjectId} {
+      allow read: if isSuperAdmin() || isAssignedToSubject(subjectId);
+
+      allow create, update: if isSuperAdmin() || (
+        isAssignedToSubject(subjectId)
+        && request.resource.data.subjectId == subjectId
+      );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isSuperAdmin() || (isTeacher() && resource.data.actorUid == request.auth.uid);
+
+      allow create: if isActiveUser()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorRole == getUserData().role;
+
+      allow update, delete: if false;
+    }
+  }
+}
